@@ -2,10 +2,10 @@ export default {
   async fetch(request, env) {
     const url = new URL(request.url);
 
-    // Toggle debug mode (true = verbose errors)
+    // Toggle debug mode
     const DEBUG = true;
 
-    // Helper: safe JSON response
+    // Safe JSON response helper
     const json = (obj, status = 200) =>
       new Response(JSON.stringify(obj, null, DEBUG ? 2 : 0), {
         status,
@@ -15,11 +15,9 @@ export default {
         }
       });
 
-    // Helper: debug log wrapper
+    // Debug logger
     const debugLog = (label, data) => {
-      if (DEBUG) {
-        console.log(`\n===== ${label} =====\n`, data);
-      }
+      if (DEBUG) console.log(`\n===== ${label} =====\n`, data);
     };
 
     // ============================
@@ -37,14 +35,14 @@ export default {
     }
 
     // ============================
-    // GET /hello (health check)
+    // GET /hello
     // ============================
     if (url.pathname === "/hello") {
       return json({ message: "Hello Angel — Gemini Worker is alive." });
     }
 
     // ============================
-    // GET /debug (full system test)
+    // GET /debug
     // ============================
     if (url.pathname === "/debug") {
       return json({
@@ -58,20 +56,22 @@ export default {
     }
 
     // ============================
-    // GET /api (fixes Unexpected '<')
+    // GET /api
     // ============================
     if (url.pathname === "/api" && request.method === "GET") {
       return json({ status: "ok", message: "API is alive" });
     }
 
     // ============================
-    // POST /api (main AI endpoint)
+    // POST /api (MAIN ENDPOINT)
     // ============================
     if (url.pathname === "/api" && request.method === "POST") {
       try {
+        // Read raw body
         const bodyText = await request.text();
         debugLog("RAW REQUEST BODY", bodyText);
 
+        // Parse JSON safely
         let parsed;
         try {
           parsed = JSON.parse(bodyText);
@@ -88,9 +88,11 @@ export default {
 
         const { query, email, pin, lang } = parsed;
 
+        // ============================
         // 1. Fetch org data from Apps Script
+        // ============================
         const APPS_SCRIPT_URL =
-          "https://script.google.com/macros/s/AKfycbzwtet2i0JuownRO1Ksiyx111WnNqOBTeKznEa2q_KdfNY6oMq3GHPSrWPnoccVnme9/exec";
+          "https://script.google.com/macros/s/AKfycbwV6TX9WrsdqYUWXl2WeAyO6F2SLygHB7TeEekPOh0h9i9OKxfLqOZZ5iOC-jWKZC4O/exec";
 
         const dataRes = await fetch(APPS_SCRIPT_URL, {
           method: "POST",
@@ -98,7 +100,21 @@ export default {
           body: JSON.stringify({ query: "__GET_DATA__", email, pin, lang })
         });
 
-        const dataJson = await dataRes.json();
+        // Handle non-JSON or HTML responses
+        let dataJson;
+        try {
+          dataJson = await dataRes.json();
+        } catch (err) {
+          return json(
+            {
+              status: "error",
+              data: "Apps Script returned invalid JSON.",
+              debug: DEBUG ? await dataRes.text() : undefined
+            },
+            500
+          );
+        }
+
         debugLog("APPS SCRIPT RESPONSE", dataJson);
 
         if (dataJson.status !== "success") {
@@ -111,7 +127,9 @@ export default {
 
         const orgData = dataJson.data;
 
+        // ============================
         // 2. Persona prompt
+        // ============================
         const personaPrompt = `
 Eres "El Patrón", Director de Tradición Dance Company.
 Hablas con autoridad, humor boricua, y estilo de líder.
@@ -127,26 +145,59 @@ ${query}
 
         debugLog("PERSONA PROMPT", personaPrompt);
 
-        // 3. Call Gemini
-        const geminiRes = await fetch(
-          "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=" +
-            env.GEMINI_API_KEY,
-          {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              contents: [{ parts: [{ text: personaPrompt }] }]
-            })
-          }
-        );
+        // ============================
+        // 3. Call Gemini API
+        // ============================
+const geminiRes = await fetch(
+  "https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=" +
+    env.GEMINI_API_KEY,
+  {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      contents: [{ parts: [{ text: personaPrompt }] }]
+    })
+  }
+);
 
-        const geminiJson = await geminiRes.json();
+
+        // Handle non-JSON or HTML responses
+        let geminiJson;
+        try {
+          geminiJson = await geminiRes.json();
+        } catch (err) {
+          return json(
+            {
+              status: "error",
+              data: "Gemini returned invalid JSON.",
+              debug: DEBUG ? await geminiRes.text() : undefined
+            },
+            500
+          );
+        }
+
         debugLog("GEMINI RAW RESPONSE", geminiJson);
 
-        const aiText =
-          geminiJson?.candidates?.[0]?.content?.parts?.[0]?.text ??
-          "⚠️ The AI returned no text.";
+        // Handle Gemini API errors
+        if (!geminiRes.ok || geminiJson.error) {
+          return json(
+            {
+              status: "error",
+              data: "Gemini API error.",
+              debug: DEBUG ? geminiJson : undefined
+            },
+            500
+          );
+        }
 
+        // Extract AI text safely
+        const aiText =
+          geminiJson?.candidates?.[0]?.content?.parts?.[0]?.text ||
+          "⚠️ Gemini returned no text.";
+
+        // ============================
+        // SUCCESS RESPONSE
+        // ============================
         return json({
           status: "success",
           data: aiText,

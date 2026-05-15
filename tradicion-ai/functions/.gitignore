@@ -1,2 +1,8 @@
 node_modules/
-*.local
+dist/
+build/
+.cache/
+firebase/
+*.log
+*.sqlite
+*.cmd
