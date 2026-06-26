@@ -65,12 +65,8 @@ async function handleRequest(request) {
     const { email, pin, query, language = 'en', action, history = [] } = payload;
 
     // Retrieve external service configurations from custom headers or payload
-    const appsScriptUrl = request.headers.get('X-Apps-Script-Url') || payload.appsScriptUrl;
+    const appsScriptUrl = request.headers.get('X-Apps-Script-Url') || payload.appsScriptUrl || "https://script.google.com/macros/s/AKfycbwV6TX9WrsdqYUWXl2WeAyO6F2SLygHB7TeEekPOh0h9i9OKxfLqOZZ5iOC-jWKZC4O/exec";
     const geminiApiKey = request.headers.get('X-Gemini-Key') || payload.geminiApiKey;
-
-    if (!appsScriptUrl) {
-      throw new Error("Operational Failure: Google Apps Script Web App URL is required in headers (X-Apps-Script-Url) or payload.");
-    }
     if (!email || !pin || !query) {
       throw new Error("Validation Failure: Email, PIN, and query are mandatory parameters.");
     }
@@ -404,6 +400,17 @@ async function handleRequest(request) {
 
     const authResult = gasData.user;
     const contextData = gasData.context;
+
+    // HANDSHAKE OPTIMIZATION: If it's just a validation handshake, return success directly without calling Gemini!
+    if (query === "Validate credentials handshake.") {
+      return new Response(JSON.stringify({
+        success: true,
+        user: authResult
+      }), {
+        status: 200,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
+    }
 
     // 3. Optional: If a local API key is provided, use it; otherwise, check env binding
     const finalApiKey = geminiApiKey || (typeof GEMINI_API_KEY !== 'undefined' ? GEMINI_API_KEY : '');

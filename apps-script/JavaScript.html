@@ -327,7 +327,11 @@
       // Cloudflare Worker auth routing
       fetch(workerUrl, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Apps-Script-Url': gasUrl,
+          'X-Gemini-Key': keyLocal
+        },
         body: JSON.stringify({ email, pin, query: "Validate credentials handshake." })
       })
         .then(res => res.json())
@@ -1876,6 +1880,9 @@
     if (!val) {
       if (key === "worker_url") {
         return "https://tradicion-api-v2.tradicion.workers.dev/";
+      }
+      if (key === "gas_url") {
+        return "https://script.google.com/macros/s/AKfycbwV6TX9WrsdqYUWXl2WeAyO6F2SLygHB7TeEekPOh0h9i9OKxfLqOZZ5iOC-jWKZC4O/exec";
       }
     }
     return val || "";
