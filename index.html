@@ -6342,6 +6342,16 @@
     // 1. First, load from standard safeGetItem (localStorage/fallback)
     hydrateDevSettings();
 
+    // Auto-enable worker mode if a worker URL is configured
+    const workerUrlVal = getNetworkSetting("worker_url");
+    if (workerUrlVal && workerUrlVal.trim() !== "") {
+      isWorkerMode = true;
+      const switchBtn = document.getElementById("architecture-toggle");
+      if (switchBtn) {
+        switchBtn.classList.add("active");
+      }
+    }
+
     // 2. If in GAS, asynchronously fetch from server UserProperties
     const isGAS = window.location.hostname.includes('googleusercontent.com') || window.location.hostname.includes('script.google.com') || window.location.hostname.includes('google.com');
     if (isGAS && typeof google !== 'undefined' && google.script && google.script.run) {
@@ -8089,6 +8099,7 @@
   // 11. MOCK BACKEND LOCAL PREVIEW SYSTEM (Supports testing completely offline)
   const MOCK_PROFILES = [
     { email: "director@tradicion.com", pin: "3999", name: "Angel Alberto Rodriguez Serrano", id: "TD-MASTER", role: "director", gender: "male", title: "Director" },
+    { email: "rodriguez2113@gmail.com", pin: "3999", name: "Angel Rodriguez", id: "TD-000", role: "director", gender: "male", title: "Director" },
     { email: "dancer1@tradicion.com", pin: "2001", name: "Gabriel Rivera", id: "TD-001", role: "performer", gender: "male", title: "Dancer" },
     { email: "dancer2@tradicion.com", pin: "2002", name: "Isabela Ortiz", id: "TD-002", role: "performer", gender: "female", title: "Dancer" },
     { email: "darien@tradicion.com", pin: "2003", name: "Darien", id: "TD-003", role: "performer", gender: "female", title: "Sub-Director" }
