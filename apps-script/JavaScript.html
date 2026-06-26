@@ -1,0 +1,3434 @@
+<script>
+  /**
+   * Tradición AI Engine — (v10.3)
+   * Client-Side JavaScript Application Controller
+   * Update Date: 2026-05-31
+   */
+
+  // STATE MANAGEMENT
+  let sessionUser = null;
+  let currentLanguage = "en"; // Default to English
+  let currentThemeIndex = 0; // 0=HQ, 1=Tropical, 2=Salsa
+  let isDarkMode = true;
+  let isWorkerMode = false; // Toggle direct GAS vs CF Worker edge
+
+  let conversations = []; // Saved localStorage chats
+  let activeChatId = null;
+  let targetContextNodeId = null; // Stored for custom context actions
+
+  let recognition = null; // Web Speech voice controller
+  let isRecording = false;
+
+  // HTML ESCAPING HELPER
+  function escapeHtml(text) {
+    if (!text) return "";
+    return text
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#039;");
+  }
+
+  // SAFE STORAGE COMPATIBILITY LAYER (Protects against sandboxed iframe localStorage SecurityErrors)
+  const storageFallback = {};
+
+  function safeGetItem(key) {
+    try {
+      return window.localStorage ? window.localStorage.getItem(key) : storageFallback[key];
+    } catch (e) {
+      console.warn("Storage access denied. Falling back to memory storage.", e);
+      return storageFallback[key] || "";
+    }
+  }
+
+  function safeSetItem(key, val) {
+    try {
+      if (window.localStorage) {
+        window.localStorage.setItem(key, val);
+      } else {
+        storageFallback[key] = val;
+      }
+    } catch (e) {
+      console.warn("Storage access denied. Falling back to memory storage.", e);
+      storageFallback[key] = val;
+    }
+  }
+
+  // UI TEXT DICTIONARIES
+  const i18n = {
+    es: {
+      welcomeTitle: "¡Saludos, Patr&oacute;n!",
+      welcomeDesc: "¿Cómo puedo servirle, patrón? ¿Quiere probar las Acciones Rápidas y Consultas en el menú desplegable?",
+      inputPlaceholder: "Pregúntale a El Patrón sobre asistencia, inventario o stipends...",
+      typingLabel: "El Patrón está analizando las tablas...",
+      menuPin: "Fijar Conversación",
+      menuUnpin: "Desfijar Conversación",
+      menuRename: "Renombrar Título",
+      menuDelete: "Eliminar Permanentemente",
+      directorClearance: "Director / Nivel 3",
+      performerClearance: "Performer / Nivel 2",
+      promptSugg1Title: "Consultar mis pagos",
+      promptSugg1Desc: "Verificar stipends y transferencias registradas.",
+      promptSugg2Title: "Inventario asignado",
+      promptSugg2Desc: "Revisar trajes, congas e instrumentos asignados.",
+      promptSugg3Title: "Mi asistencia",
+      promptSugg3Desc: "Escanear faltas y justificaciones de este ciclo.",
+      promptSugg4Title: "Manual Organizacional",
+      promptSugg4Desc: "Verificar reglamento, parejas y directivos.",
+      sidebarHistoryHeader: "HISTORIAL DE TRABAJO",
+      sidebarNoActiveConversations: "No hay conversaciones activas.",
+      sidebarManageFeedback: "Administrar Feedback",
+      sidebarSubmitFeedback: "Enviar Feedback",
+      sidebarInventoryChange: "Cambio de Inventario",
+      sidebarManageInventory: "Administrar Inventario",
+      inventoryChangeTitle: "Enviar Cambio de Inventario",
+      inventoryChangeDesc: "Bailarín o Director, envía cualquier cambio de inventario o actualización de equipo directamente al libro de Inventory_Changes.",
+      lblInventoryItemId: "ID del Artículo",
+      lblInventoryItemDesc: "Descripción del Artículo",
+      lblInventoryNotes: "Notas",
+      btnCancelInventory: "Cancelar",
+      btnSubmitInventory: "Enviar Cambio",
+      inventoryAdminTitle: "Administración de Inventario",
+      sidebarRequestReportCard: "Solicitar Tarjeta de Reporte",
+      sidebarEventSummary: "Resumen de Eventos de 90 Días",
+      sidebarNewSession: "Nueva Sesión",
+      sidebarEndHandshake: "Terminar Conexión",
+      sidebarNetworkAPIProperties: "Propiedades de Red y API",
+      sidebarUpdateInfo: "Actualizar Información",
+      updateInfoTitle: "Actualizar mi información",
+      updateInfoDesc: "Bailarín, actualiza tu dirección residencial y teléfono en nuestros registros inmediatamente, y sube tu certificado médico más reciente.",
+      lblAddress: "Dirección Residencial",
+      lblPhone: "Número de Teléfono",
+      lblEmergency: "Contacto de Emergencia",
+      lblMedicalDoc: "Documento Médico (PDF / Imagen)",
+      btnCancel: "Cancelar",
+      btnSubmit: "Enviar Información",
+      sidebarRecordPayment: "Registrar Pago en Efectivo",
+      recordPaymentTitle: "Registrar Pago en Efectivo",
+      recordPaymentDesc: "Registra una contribución de pago en efectivo directamente en el libro de contabilidad de la base de datos externa.",
+      lblPayDate: "Fecha del Pago en Efectivo",
+      lblPayAmount: "Monto Pagado ($)",
+      btnSubmitPayment: "Enviar Pago"
+    },
+    en: {
+      welcomeTitle: "Welcome, Director",
+      welcomeDesc: "How can I be of service? Want to try Quick Actions & Suggested Queries from the dropdown?",
+      inputPlaceholder: "Ask El Patrón about attendance logs, inventory, or stipends...",
+      typingLabel: "El Patrón is auditing databases...",
+      menuPin: "Pin Conversation",
+      menuUnpin: "Unpin Conversation",
+      menuRename: "Rename Title",
+      menuDelete: "Delete Permanently",
+      directorClearance: "Director / Level 3",
+      performerClearance: "Performer / Level 2",
+      promptSugg1Title: "Audit my payments",
+      promptSugg1Desc: "Verify my payment balance history.",
+      promptSugg2Title: "Assigned Inventory",
+      promptSugg2Desc: "Inspect costumes and gear checked out under my ID.",
+      promptSugg3Title: "Attendance Status",
+      promptSugg3Desc: "Scan my rehearsal log and attendance history.",
+      promptSugg4Title: "Organizational Manual",
+      promptSugg4Desc: "Inspect rules, buddy pairings, and operations.",
+      sidebarHistoryHeader: "WORKSPACE HISTORY",
+      sidebarNoActiveConversations: "No active conversations.",
+      sidebarManageFeedback: "Manage Feedback",
+      sidebarSubmitFeedback: "Submit Feedback",
+      sidebarInventoryChange: "Inventory Change",
+      sidebarManageInventory: "Manage Inventory",
+      inventoryChangeTitle: "Submit Inventory Change",
+      inventoryChangeDesc: "Performer or Director, submit any inventory changes or equipment updates directly to the Inventory_Changes ledger.",
+      lblInventoryItemId: "Item ID",
+      lblInventoryItemDesc: "Item Description",
+      lblInventoryNotes: "Notes",
+      btnCancelInventory: "Cancel",
+      btnSubmitInventory: "Submit Change",
+      inventoryAdminTitle: "Inventory Administration",
+      sidebarRequestReportCard: "Request Report Card",
+      sidebarEventSummary: "90 Day Event Summary",
+      sidebarNewSession: "New Session",
+      sidebarEndHandshake: "End Handshake",
+      sidebarNetworkAPIProperties: "Network & API Properties",
+      sidebarUpdateInfo: "Update My Information",
+      updateInfoTitle: "Update my information",
+      updateInfoDesc: "Dancer, overwrite your current address and phone details immediately in performer records, and upload your latest medical certificate.",
+      lblAddress: "Residential Address",
+      lblPhone: "Phone Number",
+      lblEmergency: "Emergency Contact",
+      lblMedicalDoc: "Medical Document (PDF / Image)",
+      btnCancel: "Cancel",
+      btnSubmit: "Submit Information",
+      sidebarRecordPayment: "Record Cash Payment",
+      recordPaymentTitle: "Record Cash Payment",
+      recordPaymentDesc: "Record a performer cash payment contribution directly in the external database ledger.",
+      lblPayDate: "Cash Payment Date",
+      lblPayAmount: "Paid Amount ($)",
+      btnSubmitPayment: "Submit Payment"
+    }
+  };
+
+  // Helper to retrieve random Puerto Rican slang suffix for error messages (v23)
+  function getSlangSuffix() {
+    const words = ["Puñueta", "Coño", "Carajo"];
+    return words[Math.floor(Math.random() * words.length)];
+  }
+
+  // INITIALIZATION
+  if (document.readyState === 'loading') {
+    window.addEventListener('DOMContentLoaded', initApp);
+  } else {
+    initApp();
+  }
+
+  function initApp() {
+    loadLocalSessionData();
+    setupSpeechEngine();
+    setupClickOutListeners();
+    loadAllSettings(); // Hydrates Settings from local and server on load
+
+    // Viewport change observer to reset mobile sidebar drawer states
+    window.addEventListener('resize', () => {
+      const isMobile = window.innerWidth <= 768;
+      if (!isMobile) {
+        const sidebar = document.querySelector(".sidebar");
+        const overlay = document.getElementById("sidebar-overlay");
+        if (sidebar) sidebar.classList.remove("active");
+        if (overlay) overlay.classList.remove("active");
+      }
+    });
+  }
+
+  function loadAllSettings() {
+    // 1. First, load from standard safeGetItem (localStorage/fallback)
+    hydrateDevSettings();
+
+    // 2. If in GAS, asynchronously fetch from server UserProperties
+    const isGAS = window.location.hostname.includes('googleusercontent.com') || window.location.hostname.includes('script.google.com') || window.location.hostname.includes('google.com');
+    if (isGAS && typeof google !== 'undefined' && google.script && google.script.run) {
+      google.script.run
+        .withSuccessHandler((res) => {
+          if (res && res.success && res.settings) {
+            console.log("Loaded persistent settings from Apps Script server UserProperties:", res.settings);
+            // Save to memory cache / safe storage layer
+            if (res.settings.gas_url) saveNetworkSetting("gas_url", res.settings.gas_url);
+            if (res.settings.worker_url) saveNetworkSetting("worker_url", res.settings.worker_url);
+            if (res.settings.gemini_key) saveNetworkSetting("gemini_key", res.settings.gemini_key);
+            
+            // Re-hydrate text fields immediately
+            hydrateDevSettings();
+          }
+        })
+        .loadServerSettings();
+    }
+  }
+
+
+  /**
+   * Double-Lock Security Authentication gateway.
+   */
+  function handleAuth(event) {
+    event.preventDefault();
+
+    const email = document.getElementById("login-email").value.trim();
+    const pin = document.getElementById("login-pin").value.trim();
+    const btnSubmit = document.getElementById("btn-login-submit");
+    const loginCard = document.querySelector(".login-card");
+
+    // Set visual loading state
+    btnSubmit.disabled = true;
+    btnSubmit.innerHTML = `<span>Validating credentials...</span><span class="material-icons-round spin">sync</span>`;
+    loginCard.classList.remove("shake");
+
+    if (!email || !pin) {
+      triggerSecurityAlert(email, "Credentials missing. Email and PIN required.");
+      resetAuthButtonState(btnSubmit);
+      return;
+    }
+
+    // Determine route based on Active selection or local config override
+    const gasUrl = getNetworkSetting("gas_url");
+    const workerUrl = getNetworkSetting("worker_url");
+    const keyLocal = getNetworkSetting("gemini_key");
+
+    if (isWorkerMode && workerUrl) {
+      // Cloudflare Worker auth routing
+      fetch(workerUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, pin, query: "Validate credentials handshake." })
+      })
+        .then(res => res.json())
+        .then(data => {
+          if (data.success) {
+            completeHandshake(data.user);
+          } else {
+            triggerSecurityAlert(email, data.error);
+          }
+        })
+        .catch(err => {
+          triggerSecurityAlert(email, "System Handshake Timeout. Check worker address or API key.");
+        })
+        .finally(() => resetAuthButtonState(btnSubmit));
+    } else {
+      // Direct Apps Script authorization routing
+      if (typeof google !== 'undefined' && google.script && google.script.run) {
+        google.script.run
+          .withSuccessHandler((user) => {
+            resetAuthButtonState(btnSubmit);
+            if (user && user.success) {
+              completeHandshake(user);
+            } else {
+              triggerSecurityAlert(email, user ? user.error : "Mismatched security clearance.");
+            }
+          })
+          .withFailureHandler((err) => {
+            resetAuthButtonState(btnSubmit);
+            triggerSecurityAlert(email, err.message || err.toString());
+          })
+          .directValidateCredentials(email, pin);
+      } else {
+        // Offline fallback / Mock local preview runner if running locally without Apps Script container
+        resetAuthButtonState(btnSubmit);
+        runMockLocalAuth(email, pin);
+      }
+    }
+  }
+
+  function resetAuthButtonState(btn) {
+    btn.disabled = false;
+    btn.innerHTML = `<span>Initiate Security Handshake</span><span class="material-icons-round">vpn_key</span>`;
+  }
+
+  function completeHandshake(user) {
+    sessionUser = user;
+
+    // Render profile metadata into dashboard
+    document.getElementById("profile-name").innerText = user.name;
+    document.getElementById("profile-email").innerText = user.email;
+    document.getElementById("badge-id").innerText = user.performerId;
+
+    const roleBadge = document.getElementById("badge-role");
+    const clearanceHeader = document.getElementById("badge-clearance-header");
+
+    const devSettingsBox = document.querySelector(".dev-settings-box");
+    const adminFeedbackBtn = document.getElementById("btn-feedback-admin");
+    const adminInventoryBtn = document.getElementById("btn-inventory-admin");
+    const isInventoryAdmin = user.email === "rodriguez2113@gmail.com" || user.email === "darienl140@gmail.com";
+    if (user.clearance === "director") {
+      roleBadge.innerText = "Director";
+      roleBadge.className = "badge-sub badge-role-director";
+      clearanceHeader.innerText = i18n[currentLanguage].directorClearance;
+      if (devSettingsBox) devSettingsBox.style.display = "block";
+      if (adminFeedbackBtn) adminFeedbackBtn.style.display = "flex";
+    } else {
+      roleBadge.innerText = "Performer";
+      roleBadge.className = "badge-sub";
+      clearanceHeader.innerText = i18n[currentLanguage].performerClearance;
+      if (devSettingsBox) devSettingsBox.style.display = "none";
+      if (adminFeedbackBtn) adminFeedbackBtn.style.display = "none";
+    }
+    if (adminInventoryBtn) {
+      adminInventoryBtn.style.display = isInventoryAdmin ? "flex" : "none";
+    }
+
+    // Slide out overlay and reveal app
+    document.getElementById("login-overlay").classList.add("hidden");
+    document.getElementById("app-container").classList.remove("hidden");
+
+    // Load conversation details
+    renderSuggestedPrompts();
+    renderHistorySidebar();
+
+    // If conversations already exist, activate the latest; else create new
+    if (conversations.length > 0) {
+      activateConversation(conversations[0].id);
+    } else {
+      createNewChat();
+    }
+
+    // Retrieve and update visual feedback stats counter
+    updateFeedbackCounter();
+    updateInventoryCounter();
+
+    // Hydrate Network & API settings
+    hydrateDevSettings();
+  }
+
+  /**
+   * Custom visual security alerts mapping exact errors.
+   */
+  function triggerSecurityAlert(email, errMsg) {
+    const card = document.querySelector(".login-card");
+    card.classList.add("shake");
+
+    const userLang = (navigator.language || navigator.userLanguage || "en").toLowerCase();
+    const isSpanish = (currentLanguage === "es" || userLang.startsWith("es"));
+    const formattedErr = isSpanish ? "¡Coño! Falta el Email o PIN" : "¡Coño! Correct your Email or PIN.";
+
+    document.getElementById("security-alert-title").innerText = isSpanish ? "Acceso Denegado" : "Access Denied";
+
+    let displayMsg = errMsg;
+    if (isSpanish) {
+      if (errMsg.includes("but I don't see that email in our performer records")) {
+        displayMsg = "Veo que estás escribiendo desde <b>" + email + "</b>, pero no encuentro ese correo en nuestros registros de bailarines. Vuelve a ingresar tu correo, carajo.";
+      } else if (errMsg.includes("but I don't see that code associated")) {
+        displayMsg = "Veo que estás escribiendo desde <b>" + email + "</b>, pero no veo ese código asociado a ese correo en nuestros registros. ¡Carajo! ¿Olvidaste tu código?";
+      } else if (errMsg.includes("Credentials missing")) {
+        displayMsg = "¡Faltan credenciales! Se requiere correo electrónico y PIN.";
+      }
+    }
+
+    // Append random Puerto Rican slang to security error messages
+    const slang = getSlangSuffix();
+    if (!displayMsg.includes("Puñueta") && !displayMsg.includes("Coño") && !displayMsg.includes("Carajo")) {
+      displayMsg = displayMsg.trim();
+      if (displayMsg.endsWith(".") || displayMsg.endsWith("!")) {
+        displayMsg = displayMsg.substring(0, displayMsg.length - 1);
+      }
+      displayMsg += `, ${slang}!`;
+    }
+
+    document.getElementById("security-alert-message").innerHTML = `<div style="font-weight: 700; margin-bottom: 12px;">${formattedErr}</div><div style="font-size: 13px; color: var(--text-muted); line-height: 1.4;">${displayMsg}</div>`;
+    document.getElementById("security-alert-modal").classList.add("active");
+
+    const dismissBtn = document.querySelector(".btn-alert-dismiss");
+    if (dismissBtn) {
+      dismissBtn.innerText = isSpanish ? "Reintentar Acceso" : "Retry Access";
+    }
+  }
+
+  function closeSecurityAlert() {
+    document.getElementById("security-alert-modal").classList.remove("active");
+  }
+
+  function handleForgotCredentials(event) {
+    event.preventDefault();
+    const title = currentLanguage === 'es' ? "Recuperar Credenciales" : "Forgot Credentials";
+    showCustomDialog(
+      title, 
+      "Boy, you are having a bad day. Well there's no way to reset anything buddy, so call Darien, carajo.", 
+      false, 
+      "", 
+      false
+    );
+  }
+
+  function handleLogout() {
+    sessionUser = null;
+    document.getElementById("app-container").classList.add("hidden");
+    document.getElementById("login-overlay").classList.remove("hidden");
+    // Clear inputs
+    document.getElementById("login-email").value = "";
+    document.getElementById("login-pin").value = "";
+  }
+
+  // 2. THEMATIC CONTROLS
+  function cycleTheme() {
+    const body = document.body;
+    body.classList.remove("theme-hq", "theme-tropical", "theme-salsa");
+
+    currentThemeIndex = (currentThemeIndex + 1) % 3;
+    if (currentThemeIndex === 0) body.classList.add("theme-hq");
+    else if (currentThemeIndex === 1) body.classList.add("theme-tropical");
+    else if (currentThemeIndex === 2) body.classList.add("theme-salsa");
+  }
+
+  function toggleDarkMode() {
+    isDarkMode = !isDarkMode;
+    const body = document.body;
+    const darkIcon = document.getElementById("dark-icon");
+
+    if (isDarkMode) {
+      body.classList.add("theme-dark");
+      darkIcon.innerText = "brightness_4";
+    } else {
+      body.classList.remove("theme-dark");
+      darkIcon.innerText = "brightness_high";
+    }
+  }
+
+  // 3. LANGUAGE & PERSONA TOGGLE
+  function toggleLanguage() {
+    currentLanguage = currentLanguage === "es" ? "en" : "es";
+    const langUpper = currentLanguage.toUpperCase();
+    const ind1 = document.getElementById("lang-indicator");
+    if (ind1) ind1.innerText = langUpper;
+    const ind2 = document.getElementById("manual-lang-indicator");
+    if (ind2) ind2.innerText = langUpper;
+
+    // Translate UI structural tags
+    const dict = i18n[currentLanguage];
+    const welcomeTitle = document.getElementById("welcome-title");
+    if (welcomeTitle) {
+      welcomeTitle.innerHTML = sessionUser && sessionUser.clearance === 'director'
+        ? (currentLanguage === 'es' ? "¡Saludos, Patr&oacute;n!" : "Welcome, Director")
+        : (currentLanguage === 'es' ? "¡Hola, Performer!" : "Hello, Performer");
+    }
+
+    const welcomeDesc = document.getElementById("welcome-desc");
+    if (welcomeDesc) welcomeDesc.innerText = dict.welcomeDesc;
+
+    const chatInput = document.getElementById("chat-input");
+    if (chatInput) chatInput.placeholder = dict.inputPlaceholder;
+
+    const typingLabel = document.getElementById("typing-label");
+    if (typingLabel) typingLabel.innerText = dict.typingLabel;
+
+    const headerBadge = document.getElementById("badge-clearance-header");
+    if (sessionUser && headerBadge) {
+      headerBadge.innerText = sessionUser.clearance === 'director' ? dict.directorClearance : dict.performerClearance;
+    }
+
+    // Translate all left side Collapsible Sidebar tags dynamically (v23)
+    const historyHeader = document.getElementById("sidebar-history-header");
+    if (historyHeader) historyHeader.innerText = dict.sidebarHistoryHeader;
+
+    const manageFeedback = document.getElementById("sidebar-manage-feedback-label");
+    if (manageFeedback) manageFeedback.innerText = dict.sidebarManageFeedback;
+
+    const manageInventory = document.getElementById("sidebar-manage-inventory-label");
+    if (manageInventory) manageInventory.innerText = dict.sidebarManageInventory;
+
+    const inventoryChange = document.getElementById("sidebar-inventory-change-label");
+    if (inventoryChange) inventoryChange.innerText = dict.sidebarInventoryChange;
+
+    const inventoryChangeTitle = document.getElementById("inventory-change-title");
+    if (inventoryChangeTitle) inventoryChangeTitle.innerText = dict.inventoryChangeTitle;
+
+    const inventoryChangeDesc = document.getElementById("inventory-change-desc");
+    if (inventoryChangeDesc) inventoryChangeDesc.innerText = dict.inventoryChangeDesc;
+
+    const lblInventoryItemId = document.getElementById("lbl-inventory-item-id");
+    if (lblInventoryItemId) lblInventoryItemId.innerText = dict.lblInventoryItemId;
+
+    const lblInventoryItemDesc = document.getElementById("lbl-inventory-item-desc");
+    if (lblInventoryItemDesc) lblInventoryItemDesc.innerText = dict.lblInventoryItemDesc;
+
+    const lblInventoryNotes = document.getElementById("lbl-inventory-notes");
+    if (lblInventoryNotes) lblInventoryNotes.innerText = dict.lblInventoryNotes;
+
+    const btnCancelInventory = document.getElementById("btn-cancel-inventory");
+    if (btnCancelInventory) btnCancelInventory.innerText = dict.btnCancelInventory;
+
+    const btnSubmitInventory = document.getElementById("btn-submit-inventory");
+    if (btnSubmitInventory) btnSubmitInventory.innerText = dict.btnSubmitInventory;
+
+    const inventoryAdminTitle = document.getElementById("inventory-admin-title");
+    if (inventoryAdminTitle) inventoryAdminTitle.innerText = dict.inventoryAdminTitle;
+
+    const newSession = document.getElementById("sidebar-new-session-label");
+    if (newSession) newSession.innerText = dict.sidebarNewSession;
+
+    const endHandshake = document.getElementById("sidebar-logout-label");
+    if (endHandshake) endHandshake.innerText = dict.sidebarEndHandshake;
+
+    const netProperties = document.getElementById("sidebar-network-properties-label");
+    if (netProperties) netProperties.innerText = dict.sidebarNetworkAPIProperties;
+
+    const updateInfoBtn = document.getElementById("sidebar-update-info-label");
+    if (updateInfoBtn) updateInfoBtn.innerText = dict.sidebarUpdateInfo;
+
+    const updateInfoTitle = document.getElementById("update-info-title");
+    if (updateInfoTitle) updateInfoTitle.innerText = dict.updateInfoTitle;
+
+    const updateInfoDesc = document.getElementById("update-info-desc");
+    if (updateInfoDesc) updateInfoDesc.innerText = dict.updateInfoDesc;
+
+    const lblAddress = document.getElementById("lbl-update-address");
+    if (lblAddress) lblAddress.innerText = dict.lblAddress;
+
+    const lblPhone = document.getElementById("lbl-update-phone");
+    if (lblPhone) lblPhone.innerText = dict.lblPhone;
+
+    const lblEmergency = document.getElementById("lbl-update-emergency");
+    if (lblEmergency) lblEmergency.innerText = dict.lblEmergency;
+
+    const lblMedicalDoc = document.getElementById("lbl-update-medical-doc");
+    if (lblMedicalDoc) lblMedicalDoc.innerText = dict.lblMedicalDoc;
+
+    const btnCancelInfo = document.getElementById("btn-cancel-update-info");
+    if (btnCancelInfo) btnCancelInfo.innerText = dict.btnCancel;
+
+    const btnSubmitInfo = document.getElementById("btn-submit-update-info");
+    if (btnSubmitInfo) btnSubmitInfo.innerText = dict.btnSubmit;
+
+    const lblSidebarRecordPayment = document.getElementById("sidebar-record-payment-label");
+    if (lblSidebarRecordPayment) lblSidebarRecordPayment.innerText = dict.sidebarRecordPayment;
+
+    const lblRecordPaymentTitle = document.getElementById("record-payment-title");
+    if (lblRecordPaymentTitle) lblRecordPaymentTitle.innerText = dict.recordPaymentTitle;
+
+    const lblRecordPaymentDesc = document.getElementById("record-payment-desc");
+    if (lblRecordPaymentDesc) lblRecordPaymentDesc.innerText = dict.recordPaymentDesc;
+
+    const lblPaymentDate = document.getElementById("lbl-payment-date");
+    if (lblPaymentDate) lblPaymentDate.innerText = dict.lblPayDate;
+
+    const lblPaymentAmount = document.getElementById("lbl-payment-amount");
+    if (lblPaymentAmount) lblPaymentAmount.innerText = dict.lblPayAmount;
+
+    const btnCancelPayment = document.getElementById("btn-cancel-payment");
+    if (btnCancelPayment) btnCancelPayment.innerText = dict.btnCancel;
+
+    const btnSubmitPayment = document.getElementById("btn-submit-payment");
+    if (btnSubmitPayment) btnSubmitPayment.innerText = dict.btnSubmitPayment;
+    // Translate Technical Manual modal elements
+    const manualTitle = document.getElementById("manual-modal-title");
+    if (manualTitle) manualTitle.innerText = currentLanguage === 'es' ? "Manual de Operaciones e Integración" : "Operations & Integration Manual";
+
+    const tabArch = document.getElementById("manual-tab-architecture");
+    if (tabArch) tabArch.innerText = currentLanguage === 'es' ? "Arquitectura Técnica" : "Technical Architecture";
+
+    const tabGuide = document.getElementById("manual-tab-user-guide");
+    if (tabGuide) tabGuide.innerText = currentLanguage === 'es' ? "Guía de Operaciones" : "Operations Guide";
+
+    const tabSop = document.getElementById("manual-tab-sop");
+    if (tabSop) tabSop.innerText = currentLanguage === 'es' ? "SOP de la Compañía" : "Company SOP";
+
+    const tabDeploy = document.getElementById("manual-tab-deployment");
+    if (tabDeploy) tabDeploy.innerText = currentLanguage === 'es' ? "Despliegue de Apps Script" : "Apps Script Deployment";
+
+    // Toggle visible language inside manual body
+    const enElements = document.querySelectorAll(".lang-en");
+    const esElements = document.querySelectorAll(".lang-es");
+    if (currentLanguage === "es") {
+      enElements.forEach(el => el.classList.add("hidden"));
+      esElements.forEach(el => el.classList.remove("hidden"));
+    } else {
+      enElements.forEach(el => el.classList.remove("hidden"));
+      esElements.forEach(el => el.classList.add("hidden"));
+    }
+
+    renderSuggestedPrompts();
+    renderHistorySidebar(); // Force refresh list elements to apply translations
+    updateFeedbackCounter(); // Force refresh feedback badge label translation
+    updateInventoryCounter(); // Force refresh inventory badge label translation
+    showToast(currentLanguage === 'es' ? "Persona de Inteligencia activa: El Patrón (Boricua)" : "Active Intelligence Persona: El Patrón (English)", "success");
+  }
+
+  /**
+   * Injects suggestions dynamically.
+   */
+  function renderSuggestedPrompts() {
+    const dict = i18n[currentLanguage];
+    const container = document.getElementById("suggestions-container");
+    if (!container) return;
+
+    const isDirector = sessionUser && sessionUser.clearance === 'director';
+    const query1 = isDirector
+      ? (currentLanguage === 'es' ? "Cuanto me pagaron este mes?" : "How much was I paid this month?")
+      : (currentLanguage === 'es' ? "¿Cuánto he pagado este mes?" : "How much have I paid this month?");
+
+    // Define drop-down options:
+    const options = [
+      { text: currentLanguage === 'es' ? "--- Seleccione una consulta o enlace rápido ---" : "--- Select a query or quick link ---", value: "", type: "default" },
+      { text: `👔 ${dict.promptSugg2Title} — ${dict.promptSugg2Desc}`, value: currentLanguage === 'es' ? "¿Qué vestuario se me ha asignado?" : "What costumes are checked out to me?", type: "query" },
+      { 
+        text: isDirector 
+          ? `📅 ${dict.promptSugg3Title} (${currentLanguage === 'es' ? "Todos los activos" : "All Active"})`
+          : `📅 ${dict.promptSugg3Title} — ${dict.promptSugg3Desc}`, 
+        value: isDirector
+          ? (currentLanguage === 'es' ? "Por favor, muestra el historial de asistencia a ensayos de todos los performers activos." : "Please show the rehearsal attendance history for all active dancers.")
+          : (currentLanguage === 'es' ? "Cual es mi asistencia en los ensayos?" : "What is my rehearsal attendance history?"), 
+        type: "query" 
+      },
+      { text: `📖 ${dict.promptSugg4Title} — ${dict.promptSugg4Desc}`, value: currentLanguage === 'es' ? "¿Quién es mi buddy y asignado?" : "Who is my buddy?", type: "query" },
+      { 
+        text: isDirector 
+          ? `🎖️ ${dict.sidebarRequestReportCard} (${currentLanguage === 'es' ? "Todos los activos" : "All Active"})`
+          : `🎖️ ${dict.sidebarRequestReportCard}`, 
+        value: isDirector
+          ? (currentLanguage === 'es' ? "Por favor, muestra el Reporte de Progreso de todos los performers activos." : "Please show the Performer Report Cards for all active dancers.")
+          : (currentLanguage === 'es' ? "Por favor, muestra mi Reporte de Progreso de Performer." : "Please show my Performer Report Card."), 
+        type: "query" 
+      },
+      { text: `📅 ${dict.sidebarEventSummary}`, value: currentLanguage === 'es' ? "Por favor, muestra mi Resumen de Eventos de 90 Días." : "Please show my 90 Day Event Summary schedule.", type: "query" },
+      { text: currentLanguage === 'es' ? "📅 Reporte de Ensayos y Prácticas de 45 Días" : "📅 45-Day Practices & Rehearsals Report", value: currentLanguage === 'es' ? "Por favor, muestra mi Reporte de Ensayos y Prácticas de 45 Días." : "Please show my 45 Day Practices & Rehearsals Report.", type: "query" }
+    ];
+
+    container.className = "suggestions-dropdown-wrapper font-inter";
+    container.innerHTML = `
+      <div class="suggestions-select-container">
+        <select id="suggestions-select" class="suggestions-select glassmorphic" onchange="handleSuggestionSelect(this)">
+          ${options.map(opt => `<option value="${opt.value}" data-type="${opt.type}">${opt.text}</option>`).join("")}
+        </select>
+      </div>
+    `;
+  }
+
+  function handleSuggestionSelect(selectEl) {
+    const selectedOption = selectEl.options[selectEl.selectedIndex];
+    const type = selectedOption.getAttribute("data-type");
+    const val = selectEl.value;
+
+    if (!val) return;
+
+    // Remove focus to prevent browser keyboard/input lockups when hiding container
+    selectEl.blur();
+
+    if (type === "query") {
+      document.getElementById("chat-input").value = val;
+      submitUserQuery();
+    } else if (type === "link") {
+      window.open(val, "_blank");
+    }
+
+    // Reset select to the default option
+    selectEl.selectedIndex = 0;
+  }
+
+  // 4. NETWORKING PIPELINES (Direct GAS vs Cf Worker Mode)
+  function toggleArchitectureMode() {
+    isWorkerMode = !isWorkerMode;
+    const switchBtn = document.getElementById("architecture-toggle");
+
+    if (isWorkerMode) {
+      switchBtn.classList.add("active");
+    } else {
+      switchBtn.classList.remove("active");
+    }
+  }
+
+  /**
+   * Dispatches prompt and routes payload.
+   */
+  function submitUserQuery() {
+    const inputEl = document.getElementById("chat-input");
+    const query = inputEl.value.trim();
+    if (!query) return;
+
+    // Append user message immediately to layout
+    appendChatMessage("user", query);
+    inputEl.value = "";
+
+    // Hide empty state welcome panel
+    const welcomePanel = document.getElementById("welcome-message-box");
+    if (welcomePanel) welcomePanel.style.display = "none";
+
+    // Trigger loading spinner
+    const btnSend = document.getElementById("btn-send-message");
+    const sendIcon = document.getElementById("send-btn-icon");
+    const typingIndicator = document.getElementById("typing-indicator");
+
+    btnSend.disabled = true;
+    btnSend.classList.add("loading");
+    sendIcon.innerText = "sync";
+    typingIndicator.classList.remove("hidden");
+
+    // Scroll chat feed
+    scrollToBottom();
+
+    // Core Dual Route Dispatcher
+    const email = sessionUser.email;
+    const pin = getPINAuth();
+
+    const devGasUrl = getNetworkSetting("gas_url");
+    const devWorkerUrl = getNetworkSetting("worker_url");
+    const devKey = getNetworkSetting("gemini_key");
+
+    const activeChat = conversations.find(c => c.id === activeChatId) || { messages: [] };
+    const historyPayload = activeChat.messages || [];
+
+    if (isWorkerMode && devWorkerUrl) {
+      // Pipeline B: Cloudflare Worker Hybrid HTTP POST
+      fetch(devWorkerUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Apps-Script-Url': devGasUrl,
+          'X-Gemini-Key': devKey
+        },
+        body: JSON.stringify({ email, pin, query, language: currentLanguage, history: historyPayload })
+      })
+        .then(res => res.json())
+        .then(data => {
+          typingIndicator.classList.add("hidden");
+          if (data.success) {
+            appendChatMessage("ai", data.response);
+            saveMessageToActiveHistory("ai", data.response);
+          } else {
+            appendChatMessage("ai", `Fallo en el gateway de El Patrón: ${data.error}`);
+          }
+        })
+        .catch(err => {
+          typingIndicator.classList.add("hidden");
+          appendChatMessage("ai", `Error al conectar con la armadura del Edge Router. Verifique configuraciones.`);
+        })
+        .finally(() => resetSenderButton(btnSend, sendIcon));
+    } else {
+      // Pipeline A: Consolidated Apps Script Direct Invoke
+      if (typeof google !== 'undefined' && google.script && google.script.run) {
+        google.script.run
+          .withSuccessHandler((res) => {
+            typingIndicator.classList.add("hidden");
+            resetSenderButton(btnSend, sendIcon);
+            if (res && res.success) {
+              appendChatMessage("ai", res.response);
+              saveMessageToActiveHistory("ai", res.response);
+            } else {
+              appendChatMessage("ai", `Carajo, ocurrió un error en el backend: ${res ? res.error : "Sin respuesta"}`);
+            }
+          })
+          .withFailureHandler((err) => {
+            typingIndicator.classList.add("hidden");
+            resetSenderButton(btnSend, sendIcon);
+            appendChatMessage("ai", `Falla de red en Google Apps Script: ${err.message || err.toString()}`);
+          })
+          .directQueryGemini(email, pin, query, currentLanguage, historyPayload);
+      } else {
+        // Offline fallback simulation
+        setTimeout(() => {
+          typingIndicator.classList.add("hidden");
+          resetSenderButton(btnSend, sendIcon);
+          const reply = runMockAIResponse(query);
+          appendChatMessage("ai", reply);
+          saveMessageToActiveHistory("ai", reply);
+        }, 1500);
+      }
+    }
+
+    // Save user's question to persistent memory
+    saveMessageToActiveHistory("user", query);
+  }
+
+  function resetSenderButton(btn, icon) {
+    btn.disabled = false;
+    btn.classList.remove("loading");
+    icon.innerText = "arrow_upward";
+  }
+
+  function parseMarkdownTables(text) {
+    const lines = text.split('\n');
+    let inTable = false;
+    let tableRows = [];
+    let tableHeaders = null;
+    let newLines = [];
+
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i].trim();
+      if (line.startsWith('|') && line.endsWith('|')) {
+        const cells = line.split('|').slice(1, -1).map(c => c.trim());
+        if (cells.every(c => /^:?-+:?$/.test(c))) {
+          continue;
+        }
+        if (!inTable) {
+          inTable = true;
+          tableHeaders = cells;
+        } else {
+          tableRows.push(cells);
+        }
+      } else {
+        if (inTable) {
+          newLines.push(renderHtmlTable(tableHeaders, tableRows));
+          inTable = false;
+          tableRows = [];
+          tableHeaders = null;
+        }
+        newLines.push(lines[i]);
+      }
+    }
+    if (inTable) {
+      newLines.push(renderHtmlTable(tableHeaders, tableRows));
+    }
+    return newLines.join('\n');
+  }
+
+  function renderHtmlTable(headers, rows) {
+    let html = '<div class="table-responsive"><table class="premium-chat-table">';
+    html += '<thead><tr>';
+    headers.forEach(h => {
+      html += `<th>${h}</th>`;
+    });
+    html += '</tr></thead>';
+    html += '<tbody>';
+    rows.forEach(row => {
+      html += '<tr>';
+      row.forEach(cell => {
+        html += `<td>${cell}</td>`;
+      });
+      html += '</tr>';
+    });
+    html += '</tbody></table></div>';
+    return html;
+  }
+
+  /**
+   * Appends chats dynamically and parses markdown operators strictly.
+   */
+  function appendChatMessage(sender, text) {
+    const feed = document.getElementById("chat-feed");
+    const msgDiv = document.createElement("div");
+    msgDiv.className = `chat-message ${sender}`;
+
+    // Escape HTML tags to prevent execution
+    const escapedText = escapeHtml(text);
+
+    // Premium Markdown & Hyperlink Tokenizer Parser
+    let parsedText = parseMarkdownTables(escapedText);
+
+    // A. Format bold operators: **bold** -> <b>bold</b>
+    parsedText = parsedText.replace(/\*\*(.*?)\*\*/g, '<b>$1</b>');
+
+    // B. Hide and tokenize Markdown Links: [label](url) -> placeholder token
+    let placeholders = [];
+    parsedText = parsedText.replace(/\[([^\]]+)\]\(([^()\s]+(?:\([^()\s]*\)[^()\s]*)*)\)/g, (match, textLabel, url) => {
+      let cleanUrl = url.trim();
+      let href = cleanUrl;
+      if (!/^(https?|mailto|tel):/i.test(cleanUrl)) {
+        if (cleanUrl.toLowerCase().startsWith('www.')) {
+          href = 'https://' + cleanUrl;
+        } else if (cleanUrl.includes('@') && !cleanUrl.includes('/')) {
+          href = 'mailto:' + cleanUrl;
+        } else if (/^[+0-9-() ]+$/.test(cleanUrl)) {
+          href = 'tel:' + cleanUrl.replace(/[^0-9+]/g, '');
+        } else {
+          href = 'https://' + cleanUrl;
+        }
+      }
+      placeholders.push(`<a href="${href}" target="_blank" class="chat-link">${textLabel}</a>`);
+      return `___LINK_PLACEHOLDER_${placeholders.length - 1}___`;
+    });
+
+    // C. Safely extract and format Raw URLs (ignoring placeholders)
+    parsedText = parsedText.replace(/((?:https?:\/\/|www\.)[^\s<[\]{}]+)/gi, (url) => {
+      let cleanUrl = url;
+      let suffix = "";
+      // Protect trailing sentence punctuations, quotes, and unbalanced parentheses
+      while (cleanUrl.length > 0) {
+        const lastChar = cleanUrl.slice(-1);
+        if (/[.,;:?!'"]/.test(lastChar)) {
+          suffix = lastChar + suffix;
+          cleanUrl = cleanUrl.slice(0, -1);
+        } else if (lastChar === ')') {
+          // Only strip if unbalanced
+          const openCount = (cleanUrl.match(/\(/g) || []).length;
+          const closeCount = (cleanUrl.match(/\)/g) || []).length;
+          if (closeCount > openCount) {
+            suffix = lastChar + suffix;
+            cleanUrl = cleanUrl.slice(0, -1);
+          } else {
+            break;
+          }
+        } else {
+          break;
+        }
+      }
+      let href = cleanUrl;
+      if (cleanUrl.toLowerCase().startsWith('www.')) {
+        href = 'https://' + cleanUrl;
+      }
+      return `<a href="${href}" target="_blank" class="chat-link">${cleanUrl}</a>${suffix}`;
+    });
+
+    // D. Restore tokenized Markdown Links in-place
+    parsedText = parsedText.replace(/___LINK_PLACEHOLDER_(\d+)___/g, (match, index) => {
+      return placeholders[parseInt(index)];
+    });
+
+    // E. Convert newlines to HTML breaks
+    parsedText = parsedText.replace(/\n/g, '<br>');
+
+    const senderLabel = sender === 'user' ? 'YO:' : 'EL PATRÓN:';
+
+    if (sender === 'ai') {
+      msgDiv.innerHTML = `
+        <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+          <span class="message-meta font-outfit">${senderLabel}</span>
+          <button class="btn-tts-speak glassmorphic" onclick="speakMessage(this)" 
+            onmouseenter="this.style.background='rgba(255,255,255,0.05)'; this.style.color='var(--primary)';" 
+            onmouseleave="if(!this.classList.contains('speaking')) { this.style.background='transparent'; this.style.color='var(--text-muted)'; } else { this.style.background='rgba(255,255,255,0.05)'; }"
+            style="background: transparent; border: none; color: var(--text-muted); cursor: pointer; display: flex; align-items: center; padding: 4px; border-radius: 50%; margin-left: 8px; transition: all 0.2s;" title="Listen to response">
+            <span class="material-icons-round" style="font-size: 16px;">volume_up</span>
+          </button>
+        </div>
+        <div class="message-bubble font-inter">${parsedText}</div>
+      `;
+    } else {
+      msgDiv.innerHTML = `
+        <span class="message-meta font-outfit">${senderLabel}</span>
+        <div class="message-bubble font-inter">${parsedText}</div>
+      `;
+    }
+
+    feed.appendChild(msgDiv);
+    scrollToBottom();
+  }
+
+  // TEXT-TO-SPEECH (TTS) NATIVE CONTROLLER WITH HIGH-FIDELITY VOICE SELECTOR
+  let currentUtterance = null;
+
+  function selectVoice(lang) {
+    if (typeof window === 'undefined' || !window.speechSynthesis) return null;
+    const voices = window.speechSynthesis.getVoices();
+    if (!voices || voices.length === 0) return null;
+
+    const matching = voices.filter(v => v.lang.toLowerCase().startsWith(lang.toLowerCase()));
+    if (matching.length === 0) return null;
+
+    // Prioritize natural neural/Google/Apple/Microsoft premium voices
+    const priorityKeywords = ["natural", "google", "premium", "microsoft", "apple"];
+    for (const keyword of priorityKeywords) {
+      const match = matching.find(v => v.name.toLowerCase().includes(keyword));
+      if (match) return match;
+    }
+
+    return matching[0];
+  }
+
+  function speakMessage(btn) {
+    if (window.speechSynthesis.speaking) {
+      window.speechSynthesis.cancel();
+      if (btn.classList.contains("speaking")) {
+        resetTtsButtons();
+        return;
+      }
+    }
+
+    resetTtsButtons();
+
+    const messageContainer = btn.closest(".chat-message");
+    const bubble = messageContainer ? messageContainer.querySelector(".message-bubble") : null;
+    if (!bubble) return;
+
+    const rawText = bubble.innerText || bubble.textContent;
+    const cleanText = rawText.replace(/___LINK_PLACEHOLDER_\d+___/g, "").trim();
+
+    if (!cleanText) return;
+
+    const utterance = new SpeechSynthesisUtterance(cleanText);
+    const targetLang = currentLanguage === 'es' ? 'es' : 'en';
+    utterance.lang = currentLanguage === 'es' ? 'es-US' : 'en-US';
+
+    const bestVoice = selectVoice(targetLang);
+    if (bestVoice) {
+      utterance.voice = bestVoice;
+      console.log(`TTS Voice Assigned: ${bestVoice.name} (${bestVoice.lang})`);
+    }
+    
+    btn.classList.add("speaking");
+    const icon = btn.querySelector(".material-icons-round");
+    if (icon) {
+      icon.innerText = "volume_off";
+      icon.style.color = "var(--primary)";
+      icon.style.filter = "drop-shadow(0 0 4px var(--primary))";
+      btn.style.background = 'rgba(255,255,255,0.05)';
+    }
+
+    utterance.onend = () => {
+      btn.classList.remove("speaking");
+      if (icon) {
+        icon.innerText = "volume_up";
+        icon.style.color = "";
+        icon.style.filter = "";
+        btn.style.background = 'transparent';
+      }
+    };
+
+    utterance.onerror = () => {
+      btn.classList.remove("speaking");
+      if (icon) {
+        icon.innerText = "volume_up";
+        icon.style.color = "";
+        icon.style.filter = "";
+        btn.style.background = 'transparent';
+      }
+    };
+
+    currentUtterance = utterance;
+    window.speechSynthesis.speak(utterance);
+  }
+
+  function resetTtsButtons() {
+    document.querySelectorAll(".btn-tts-speak").forEach(btn => {
+      btn.classList.remove("speaking");
+      btn.style.background = 'transparent';
+      const icon = btn.querySelector(".material-icons-round");
+      if (icon) {
+        icon.innerText = "volume_up";
+        icon.style.color = "";
+        icon.style.filter = "";
+      }
+    });
+  }
+
+  function scrollToBottom() {
+    const feed = document.getElementById("chat-feed");
+    feed.scrollTop = feed.scrollHeight;
+  }
+
+  // 5. HISTORY & LOCALPERSISTENCE
+  function loadLocalSessionData() {
+    const stored = safeGetItem("tradicion_chats");
+    if (stored) {
+      try {
+        conversations = JSON.parse(stored);
+      } catch (e) {
+        console.error("Failed to parse stored conversations", e);
+        conversations = [];
+      }
+    }
+  }
+
+  function saveConversationsToStore() {
+    safeSetItem("tradicion_chats", JSON.stringify(conversations));
+  }
+
+  function renderHistorySidebar() {
+    const container = document.getElementById("history-container");
+    container.innerHTML = "";
+
+    if (conversations.length === 0) {
+      container.innerHTML = `<div class="history-empty">${i18n[currentLanguage].sidebarNoActiveConversations}</div>`;
+      return;
+    }
+
+    // Prioritize pinned conversations to the top, then sort by timestamp descending
+    const sorted = [...conversations].sort((a, b) => {
+      if (a.pinned && !b.pinned) return -1;
+      if (!a.pinned && b.pinned) return 1;
+      return b.timestamp - a.timestamp;
+    });
+
+    sorted.forEach(chat => {
+      const item = document.createElement("div");
+      item.className = `history-item ${chat.id === activeChatId ? 'active' : ''}`;
+      item.dataset.chatId = chat.id;
+
+      // Custom context bindings (Right-Click desktop, Long-press touch mobile)
+      item.addEventListener('contextmenu', (e) => triggerContextMenu(e, chat.id));
+
+      // Handle double-tap/long-press on mobile
+      let touchTimer;
+      item.addEventListener('touchstart', (e) => {
+        touchTimer = setTimeout(() => triggerContextMenu(e, chat.id), 600);
+      });
+      item.addEventListener('touchend', () => clearTimeout(touchTimer));
+
+      item.onclick = (e) => {
+        if (e.target.closest('.btn-item-options')) return;
+        activateConversation(chat.id);
+      };
+
+      item.innerHTML = `
+      <div class="history-item-left">
+        <span class="material-icons-round ${chat.pinned ? 'icon-gold' : ''}">
+          ${chat.pinned ? 'push_pin' : 'chat_bubble_outline'}
+        </span>
+        <span class="history-item-title font-inter">${escapeHtml(chat.title)}</span>
+      </div>
+      <button class="btn-item-options" onclick="triggerContextMenuAtButton(event, '${chat.id}')">
+        <span class="material-icons-round">more_vert</span>
+      </button>
+    `;
+
+      container.appendChild(item);
+    });
+  }
+
+  function createNewChat() {
+    const newId = "chat_" + Date.now();
+    const newChat = {
+      id: newId,
+      title: currentLanguage === 'es' ? "Nueva Conversación" : "New Conversation",
+      timestamp: Date.now(),
+      pinned: false,
+      messages: []
+    };
+
+    conversations.push(newChat);
+    saveConversationsToStore();
+    activateConversation(newId);
+  }
+
+  function activateConversation(chatId) {
+    activeChatId = chatId;
+
+    // Re-render sidebar active selections
+    renderHistorySidebar();
+
+    // On mobile, close sidebar after selecting a conversation to reveal feed
+    const isMobile = window.innerWidth <= 768;
+    if (isMobile) {
+      const sidebar = document.querySelector(".sidebar");
+      const overlay = document.getElementById("sidebar-overlay");
+      if (sidebar) sidebar.classList.remove("active");
+      if (overlay) overlay.classList.remove("active");
+    }
+
+    const chat = conversations.find(c => c.id === chatId);
+    if (!chat) return;
+
+    // Clear feed and rebuild UI chat bubbles
+    const feed = document.getElementById("chat-feed");
+    feed.innerHTML = "";
+
+    if (chat.messages.length === 0) {
+      // Show welcome panel empty state
+      const welcomeTitleText = sessionUser && sessionUser.clearance === 'director'
+        ? (currentLanguage === 'es' ? "¡Saludos, Patr&oacute;n!" : "Welcome, Director")
+        : (currentLanguage === 'es' ? "¡Hola, Performer!" : "Hello, Performer");
+
+      feed.innerHTML = `
+      <div class="welcome-box font-outfit" id="welcome-message-box">
+        <span class="material-icons-round welcome-logo-icon">spatial_audio_off</span>
+        <h1 id="welcome-title">${welcomeTitleText}</h1>
+        <p id="welcome-desc">${i18n[currentLanguage].welcomeDesc}</p>
+        <div class="suggestions-grid font-inter" id="suggestions-container"></div>
+      </div>
+    `;
+      renderSuggestedPrompts();
+    } else {
+      chat.messages.forEach(msg => {
+        appendChatMessage(msg.sender, msg.text);
+      });
+    }
+  }
+
+  function saveMessageToActiveHistory(sender, text) {
+    const chat = conversations.find(c => c.id === activeChatId);
+    if (!chat) return;
+
+    chat.messages.push({ sender, text });
+    chat.timestamp = Date.now();
+
+    // Update conversational titles using the first 20 characters of first query
+    if (chat.messages.length === 1 && sender === "user") {
+      chat.title = text.substring(0, 20) + (text.length > 20 ? "..." : "");
+    }
+
+    saveConversationsToStore();
+    renderHistorySidebar();
+  }
+
+  // 6. CUSTOM FLOATING CONTEXT MENU ACTIONS (Desktop/Mobile)
+  function triggerContextMenu(event, chatId) {
+    event.preventDefault();
+    targetContextNodeId = chatId;
+
+    const menu = document.getElementById("custom-context-menu");
+
+    // Determine if already pinned to update menu label
+    const chat = conversations.find(c => c.id === chatId);
+    const pinLabel = document.getElementById("context-pin-label");
+    if (chat && chat.pinned) {
+      pinLabel.innerText = i18n[currentLanguage].menuUnpin;
+    } else {
+      pinLabel.innerText = i18n[currentLanguage].menuPin;
+    }
+
+    // Calculate relative mouse alignments
+    const x = event.clientX || (event.touches ? event.touches[0].clientX : 200);
+    const y = event.clientY || (event.touches ? event.touches[0].clientY : 200);
+
+    menu.style.left = `${x}px`;
+    menu.style.top = `${y}px`;
+    menu.style.display = "block";
+  }
+
+  function triggerContextMenuAtButton(event, chatId) {
+    event.stopPropagation();
+    const rect = event.currentTarget.getBoundingClientRect();
+    triggerContextMenu({
+      preventDefault: () => { },
+      clientX: rect.left - 180,
+      clientY: rect.bottom + 5
+    }, chatId);
+  }
+
+  /**
+   * Promise-based custom glassmorphic dialog system (Replaces native prompt/confirm)
+   */
+  function showCustomDialog(title, message, isPrompt = false, defaultValue = "", showCancel = true) {
+    try {
+      // If it's an error dialog, append a random Puerto Rican slang word (v23)
+      const isError = /error|fail|denied|invalid/i.test(title) || (message && /error|fail|denied|invalid/i.test(message));
+      if (isError && message) {
+        const slang = getSlangSuffix();
+        if (!message.includes("Puñueta") && !message.includes("Coño") && !message.includes("Carajo")) {
+          message = message.trim();
+          if (message.endsWith(".") || message.endsWith("!")) {
+            message = message.substring(0, message.length - 1);
+          }
+          message += `, ${slang}!`;
+        }
+      }
+
+      return new Promise((resolve) => {
+        try {
+          const modal = document.getElementById("custom-dialog-modal");
+          const titleEl = document.getElementById("custom-dialog-title");
+          const messageEl = document.getElementById("custom-dialog-message");
+          const inputContainer = document.getElementById("custom-dialog-input-container");
+          const inputEl = document.getElementById("custom-dialog-input");
+          const btnCancel = document.getElementById("custom-dialog-btn-cancel");
+          const btnConfirm = document.getElementById("custom-dialog-btn-confirm");
+
+          if (!modal || !titleEl || !messageEl || !btnConfirm) {
+            console.error("Dialog elements missing in DOM.");
+            resolve(isPrompt ? null : false);
+            return;
+          }
+
+          titleEl.innerText = title || "";
+          messageEl.innerText = message || "";
+
+          const isSpanish = (currentLanguage === "es");
+          if (btnCancel) {
+            btnCancel.innerText = isSpanish ? "Cancelar" : "Cancel";
+          }
+          btnConfirm.innerText = isSpanish ? "Confirmar" : "Confirm";
+
+          if (showCancel && btnCancel) {
+            btnCancel.style.display = "";
+          } else if (btnCancel) {
+            btnCancel.style.display = "none";
+            btnConfirm.innerText = isSpanish ? "OK" : "OK";
+          }
+
+          if (isPrompt && inputContainer && inputEl) {
+            inputContainer.style.display = "block";
+            inputEl.value = defaultValue;
+            setTimeout(() => inputEl.focus(), 100);
+          } else if (inputContainer) {
+            inputContainer.style.display = "none";
+          }
+
+          modal.classList.add("active");
+
+          const handleKeydown = (e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              e.stopPropagation();
+              cleanup();
+              resolve(isPrompt ? (inputEl ? inputEl.value : "") : true);
+            } else if (e.key === "Escape") {
+              e.preventDefault();
+              e.stopPropagation();
+              cleanup();
+              resolve(isPrompt ? null : false);
+            }
+          };
+
+          const handleConfirm = () => {
+            cleanup();
+            resolve(isPrompt ? (inputEl ? inputEl.value : "") : true);
+          };
+
+          const handleCancel = () => {
+            cleanup();
+            resolve(isPrompt ? null : false);
+          };
+
+          const cleanup = () => {
+            modal.classList.remove("active");
+            btnConfirm.removeEventListener("click", handleConfirm);
+            if (btnCancel) btnCancel.removeEventListener("click", handleCancel);
+            document.removeEventListener("keydown", handleKeydown);
+          };
+
+          btnConfirm.addEventListener("click", handleConfirm);
+          if (btnCancel) btnCancel.addEventListener("click", handleCancel);
+          document.addEventListener("keydown", handleKeydown);
+        } catch (innerErr) {
+          console.error("Promise setup error in showCustomDialog:", innerErr);
+          resolve(isPrompt ? null : false);
+        }
+      });
+    } catch (outerErr) {
+      console.error("Outer error in showCustomDialog:", outerErr);
+      return Promise.resolve(isPrompt ? null : false);
+    }
+  }
+
+  function contextActionPin() {
+    const chat = conversations.find(c => c.id === targetContextNodeId);
+    if (chat) {
+      chat.pinned = !chat.pinned;
+      saveConversationsToStore();
+      renderHistorySidebar();
+    }
+    closeContextMenu();
+  }
+
+  function contextActionRename() {
+    const chat = conversations.find(c => c.id === targetContextNodeId);
+    if (chat) {
+      const titleMsg = currentLanguage === 'es' ? "Renombrar conversación:" : "Rename Conversation:";
+      showCustomDialog(titleMsg, "", true, chat.title).then(newName => {
+        if (newName && newName.trim() !== "") {
+          chat.title = newName.trim();
+          saveConversationsToStore();
+          renderHistorySidebar();
+        }
+      });
+    }
+    closeContextMenu();
+  }
+
+  function contextActionDelete() {
+    try {
+      if (!targetContextNodeId) {
+        console.warn("contextActionDelete: targetContextNodeId is null or undefined.");
+        showToast(currentLanguage === 'es' ? "Error: No se identificó la conversación." : "Error: Conversation could not be identified.", "error");
+        return;
+      }
+
+      const chatIndex = conversations.findIndex(c => c.id === targetContextNodeId);
+      if (chatIndex === -1) {
+        console.warn("contextActionDelete: Conversation ID not found in memory: " + targetContextNodeId);
+        showToast(currentLanguage === 'es' ? "Error: Conversación no encontrada en el historial." : "Error: Conversation not found in history list.", "error");
+        closeContextMenu();
+        return;
+      }
+
+      const confirmTitle = currentLanguage === 'es' ? "Eliminar Conversación" : "Delete Conversation";
+      const confirmMsg = currentLanguage === 'es' ? "¿Está seguro de eliminar permanentemente esta conversación?" : "Are you sure you want to permanently delete this conversation?";
+      
+      showCustomDialog(confirmTitle, confirmMsg, false).then(confirmed => {
+        try {
+          if (confirmed) {
+            const index = conversations.findIndex(c => c.id === targetContextNodeId);
+            if (index !== -1) {
+              conversations.splice(index, 1);
+              saveConversationsToStore();
+
+              // If deleted active chat, fallback selection
+              if (activeChatId === targetContextNodeId) {
+                activeChatId = conversations.length > 0 ? conversations[0].id : null;
+              }
+
+              if (activeChatId) {
+                activateConversation(activeChatId);
+              } else {
+                createNewChat();
+              }
+              showToast(currentLanguage === 'es' ? "Conversación eliminada con éxito." : "Conversation deleted successfully.", "success");
+            } else {
+              showToast(currentLanguage === 'es' ? "Error: La conversación ya no existe." : "Error: Conversation no longer exists.", "error");
+            }
+          }
+        } catch (innerErr) {
+          console.error("Error inside contextActionDelete confirmation:", innerErr);
+          showToast("Error processing deletion: " + innerErr.toString(), "error");
+        }
+      });
+    } catch (err) {
+      console.error("Error in contextActionDelete:", err);
+      showToast("Delete operation failed: " + err.toString(), "error");
+    }
+    closeContextMenu();
+  }
+
+  function closeContextMenu() {
+    document.getElementById("custom-context-menu").style.display = "none";
+  }
+
+  function setupClickOutListeners() {
+    document.addEventListener('click', (e) => {
+      const contextMenu = document.getElementById("custom-context-menu");
+      if (contextMenu && !e.target.closest('#custom-context-menu')) {
+        closeContextMenu();
+      }
+    });
+
+    // Close alerts on modal backdrops safely
+    const securityModal = document.getElementById("security-alert-modal");
+    if (securityModal) {
+      securityModal.addEventListener('click', (e) => {
+        if (e.target === securityModal) {
+          closeSecurityAlert();
+        }
+      });
+    }
+  }
+
+  // 7. PUERTO RICAN VOICE SPEECH ENGINE
+  function setupSpeechEngine() {
+    try {
+      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+      if (!SpeechRecognition) {
+        console.log("Speech recognition not supported on this device browser runtime.");
+        return;
+      }
+
+      recognition = new SpeechRecognition();
+      recognition.continuous = false;
+      recognition.interimResults = false;
+      recognition.lang = "es-PR"; // Custom configured for Puerto Rican Spanish!
+
+      recognition.onstart = () => {
+        isRecording = true;
+        const textPrompt = document.getElementById("chat-input");
+        window.preRecordText = textPrompt ? textPrompt.value.trim() : "";
+        const mic = document.getElementById("btn-voice-mic");
+        const micIcon = document.getElementById("voice-mic-icon");
+        if (mic) mic.classList.add("recording");
+        if (micIcon) micIcon.innerText = "settings_voice";
+      };
+
+      recognition.onresult = (event) => {
+        let finalTranscript = "";
+        for (let i = 0; i < event.results.length; ++i) {
+          if (event.results[i].isFinal) {
+            finalTranscript += event.results[i][0].transcript;
+          }
+        }
+        const textPrompt = document.getElementById("chat-input");
+        if (textPrompt) {
+          const prefix = window.preRecordText || "";
+          textPrompt.value = prefix + (prefix ? " " : "") + finalTranscript;
+        }
+      };
+
+      recognition.onerror = (e) => {
+        console.error("Speech Recognition Error: ", e);
+        let errorMsg = "Speech recognition error.";
+        if (e.error === 'not-allowed') {
+          errorMsg = currentLanguage === 'es' 
+            ? "Acceso al micrófono denegado. Nota: en Google Apps Script, el navegador bloquea el micrófono dentro de iframes sandboxed." 
+            : "Microphone access denied. Note: in Google Apps Script, browsers block microphone access inside sandboxed iframes.";
+        } else if (e.error === 'no-speech') {
+          errorMsg = currentLanguage === 'es' ? "No se detectó voz. Habla más claro, carajo." : "No speech detected. Speak clearly.";
+        } else {
+          errorMsg = `Speech error: ${e.error}`;
+        }
+        showToast(errorMsg, "error");
+        stopRecordingUI();
+      };
+
+      recognition.onend = () => {
+        stopRecordingUI();
+      };
+
+      // Set up message receiver for secure Cloudflare Worker voice bridge popups
+      if (!window.hasSpeechMessageListener) {
+        window.addEventListener('message', (event) => {
+          const workerUrl = getNetworkSetting("worker_url");
+          if (workerUrl && !workerUrl.includes(event.origin)) {
+            return;
+          }
+          if (event.data && event.data.type === 'speech-result') {
+            const transcript = event.data.transcript;
+            const textPrompt = document.getElementById("chat-input");
+            if (textPrompt && transcript) {
+              textPrompt.value += (textPrompt.value ? " " : "") + transcript;
+            }
+            stopRecordingUI();
+          } else if (event.data && event.data.type === 'speech-error') {
+            showToast(event.data.error, "error");
+            stopRecordingUI();
+          } else if (event.data && event.data.type === 'speech-close') {
+            stopRecordingUI();
+          }
+        });
+        window.hasSpeechMessageListener = true;
+      }
+    } catch (err) {
+      console.warn("Speech recognition initialization blocked by security or sandboxing:", err);
+      recognition = null;
+    }
+  }
+
+  function toggleVoiceSpeech() {
+    // Detect if running inside Google Apps Script iframe environment
+    const isGAS = window.location.hostname.includes('googleusercontent.com') || window.location.hostname.includes('script.google.com') || window.location.hostname.includes('google.com');
+    if (isGAS) {
+      const workerUrl = getNetworkSetting("worker_url");
+      if (!workerUrl) {
+        showToast(
+          currentLanguage === 'es'
+            ? "Acceso al micrófono bloqueado en Google Apps Script. Configure su URL de Cloudflare Worker en Network & API Properties para activar la voz, carajo."
+            : "Microphone access denied in Google Apps Script. Configure your Cloudflare Worker URL in Network & API Properties to enable voice input.",
+          "error"
+        );
+        return;
+      }
+
+      if (isRecording) {
+        return;
+      }
+
+      // Visual UI Feedback
+      isRecording = true;
+      const mic = document.getElementById("btn-voice-mic");
+      const micIcon = document.getElementById("voice-mic-icon");
+      if (mic) mic.classList.add("recording");
+      if (micIcon) micIcon.innerText = "settings_voice";
+
+      const cleanWorkerUrl = workerUrl.trim().replace(/\/$/, "");
+      const targetLang = currentLanguage === 'es' ? 'es-PR' : 'en-US';
+      const speechUrl = `${cleanWorkerUrl}/speech?lang=${targetLang}`;
+
+      // Open centered popup
+      const width = 460;
+      const height = 400;
+      const left = (window.screen.width / 2) - (width / 2);
+      const top = (window.screen.height / 2) - (height / 2);
+
+      const voicePopup = window.open(
+        speechUrl,
+        "ElPatronVoicePopup",
+        `width=${width},height=${height},top=${top},left=${left},status=no,menubar=no,toolbar=no,location=no,resizable=no`
+      );
+
+      if (!voicePopup) {
+        showToast(
+          currentLanguage === 'es'
+            ? "Popup bloqueado. Por favor permita ventanas emergentes para usar la voz."
+            : "Popup blocked. Please enable popups for this site to use voice recognition.",
+          "error"
+        );
+        stopRecordingUI();
+        return;
+      }
+
+      const checkClosedInterval = setInterval(() => {
+        if (voicePopup.closed) {
+          clearInterval(checkClosedInterval);
+          stopRecordingUI();
+        }
+      }, 1000);
+
+      return;
+    }
+
+    if (!recognition) {
+      setupSpeechEngine();
+      if (!recognition) {
+        showToast(currentLanguage === 'es' ? "Reconocimiento de voz no soportado en este navegador. En iOS/Safari, use el botón de micrófono nativo de su teclado." : "Speech recognition is not supported in this browser. On iOS/Safari, please try using your keyboard's native dictation button.", "error");
+        return;
+      }
+    }
+
+    if (isRecording) {
+      recognition.stop();
+    } else {
+      try {
+        // Start speech recognition engine directly. Chrome handles permission requests.
+        recognition.lang = currentLanguage === "es" ? "es-PR" : "en-US";
+        recognition.start();
+      } catch (err) {
+        console.error("Speech recognition start failed:", err);
+        showToast(currentLanguage === 'es' ? "Error al iniciar micrófono." : "Failed to start microphone.", "error");
+      }
+    }
+  }
+
+  function stopRecordingUI() {
+    isRecording = false;
+    const mic = document.getElementById("btn-voice-mic");
+    const micIcon = document.getElementById("voice-mic-icon");
+    mic.classList.remove("recording");
+    micIcon.innerText = "mic";
+  }
+
+  // 8. UTILITIES & DATA EXPORT CHANNELS
+  function showToast(message, type = "success") {
+    // Append a random Puerto Rican slang suffix to error toasts (v23)
+    if (type === "error") {
+      const slang = getSlangSuffix();
+      if (!message.includes("Puñueta") && !message.includes("Coño") && !message.includes("Carajo")) {
+        message = message.trim();
+        if (message.endsWith(".") || message.endsWith("!")) {
+          message = message.substring(0, message.length - 1);
+        }
+        message += `, ${slang}!`;
+      }
+    }
+
+    const container = document.getElementById("toast-container");
+    if (!container) return;
+
+    const toast = document.createElement("div");
+    toast.className = `toast glassmorphic`;
+
+    let iconName = "info";
+    if (type === "success") {
+      iconName = "check_circle";
+    } else if (type === "error") {
+      iconName = "error";
+    } else if (type === "warning") {
+      iconName = "warning";
+    }
+
+    toast.innerHTML = `
+    <span class="material-icons-round toast-icon ${type}">${iconName}</span>
+    <span class="toast-message">${message}</span>
+  `;
+
+    container.appendChild(toast);
+
+    // Trigger animation after append
+    setTimeout(() => {
+      toast.classList.add("show");
+    }, 50);
+
+    // Auto remove toast
+    setTimeout(() => {
+      toast.classList.remove("show");
+      setTimeout(() => {
+        toast.remove();
+      }, 400);
+    }, 4000);
+  }
+
+  function copyThreadToClipboard() {
+    const chat = conversations.find(c => c.id === activeChatId);
+    if (!chat || chat.messages.length === 0) return;
+
+    let clipText = `El Patrón (Tradición AI) OS v14.2 — Registro del Hilo: ${chat.title}\n`;
+    clipText += `==============================================\n\n`;
+
+    chat.messages.forEach(msg => {
+      const label = msg.sender === 'user' ? 'YO' : 'EL PATRÓN';
+      clipText += `${label}: ${msg.text}\n\n`;
+    });
+
+    navigator.clipboard.writeText(clipText)
+      .then(() => {
+        showToast(currentLanguage === 'es' ? "Hilo copiado al portapapeles con éxito." : "Thread copied to clipboard successfully.", "success");
+      })
+      .catch(err => {
+        console.error("Clipboard Copy Error: ", err);
+      });
+  }
+
+  function downloadThreadAsTxt() {
+    const chat = conversations.find(c => c.id === activeChatId);
+    if (!chat || chat.messages.length === 0) return;
+
+    let fileText = `El Patrón (Tradición AI) OS v14.2 — Registro del Hilo: ${chat.title}\n`;
+    fileText += `Fecha de exportación: ${new Date().toLocaleString()}\n`;
+    fileText += `==============================================\n\n`;
+
+    chat.messages.forEach(msg => {
+      const label = msg.sender === 'user' ? 'YO' : 'EL PATRÓN';
+      fileText += `${label}: ${msg.text}\n\n`;
+    });
+
+    const blob = new Blob([fileText], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "El_Patron_Chat.txt";
+    document.body.appendChild(a);
+    a.click();
+
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
+
+  // 9. TECHNICAL GUIDE OVERLAY METHODS
+  function openManualModal() {
+    document.getElementById("manual-modal").classList.add("active");
+  }
+
+  function closeManualModal() {
+    document.getElementById("manual-modal").classList.remove("active");
+  }
+
+  function switchManualTab(tabId) {
+    // Toggle tab buttons visual active state
+    const btns = document.querySelectorAll(".manual-tab-btn");
+    btns.forEach(btn => btn.classList.remove("active"));
+
+    // Find trigger button and activate
+    const activeBtn = Array.from(btns).find(btn => btn.getAttribute("onclick").includes(tabId));
+    if (activeBtn) activeBtn.classList.add("active");
+
+    // Toggle tab contents visibility
+    const contents = document.querySelectorAll(".manual-tab-content");
+    contents.forEach(div => div.classList.add("hidden"));
+    document.getElementById(tabId).classList.remove("hidden");
+  }
+  function setGuideView(btn, mode) {
+    const selector = btn.parentElement;
+    const btns = selector.querySelectorAll(".view-sel-btn");
+    btns.forEach(b => b.classList.remove("active"));
+
+    btn.classList.add("active");
+
+    const guideSection = selector.parentElement;
+    const pinsContainer = guideSection.querySelector(".pins-container");
+    const whiteboardContainer = guideSection.querySelector(".whiteboard-container");
+
+    if (mode === 'pins') {
+      if (pinsContainer) pinsContainer.classList.remove("hidden");
+      if (whiteboardContainer) {
+        whiteboardContainer.classList.remove("active");
+        whiteboardContainer.classList.add("hidden");
+      }
+    } else {
+      if (pinsContainer) pinsContainer.classList.add("hidden");
+      if (whiteboardContainer) {
+        whiteboardContainer.classList.remove("hidden");
+        whiteboardContainer.classList.add("active");
+      }
+    }
+  }
+
+  // 10. LOCAL NETWORK & CONFIG SETTINGS PERSISTENCE
+  function getNetworkSetting(key) {
+    const val = safeGetItem(`tradicion_setting_${key}`);
+    if (!val) {
+      if (key === "worker_url") {
+        return "https://tradicion-api-v2.tradicion.workers.dev/";
+      }
+    }
+    return val || "";
+  }
+
+  function saveNetworkSetting(key, val) {
+    safeSetItem(`tradicion_setting_${key}`, val);
+  }
+
+  function toggleSidebar() {
+    const sidebar = document.querySelector(".sidebar");
+    const overlay = document.getElementById("sidebar-overlay");
+    const isMobile = window.innerWidth <= 768;
+
+    if (isMobile) {
+      const isActive = sidebar.classList.toggle("active");
+      if (overlay) {
+        if (isActive) {
+          overlay.classList.add("active");
+        } else {
+          overlay.classList.remove("active");
+        }
+      }
+    } else {
+      // Desktop collapse
+      const grid = document.querySelector(".dashboard-grid");
+      if (grid) {
+        grid.classList.toggle("sidebar-collapsed");
+      }
+    }
+  }
+
+  function toggleSidebarAndSettings() {
+    const sidebar = document.querySelector(".sidebar");
+    const overlay = document.getElementById("sidebar-overlay");
+    const isMobile = window.innerWidth <= 768;
+
+    if (isMobile) {
+      const isActive = sidebar.classList.toggle("active");
+      if (overlay) {
+        if (isActive) {
+          overlay.classList.add("active");
+        } else {
+          overlay.classList.remove("active");
+        }
+      }
+
+      // Auto-expand dev settings panel if opening and user is Director
+      if (isActive) {
+        if (sessionUser && sessionUser.clearance === 'director') {
+          const panel = document.getElementById("dev-settings-panel");
+          if (panel && panel.classList.contains("hidden")) {
+            toggleDevPanel();
+          }
+          // Smooth scroll to dev settings box
+          const devBox = document.querySelector(".dev-settings-box");
+          if (devBox) {
+            setTimeout(() => {
+              devBox.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            }, 350); // Wait for sliding transition (300ms)
+          }
+        }
+      }
+    } else {
+      // Desktop: just toggle dev accordion panel
+      toggleDevPanel();
+    }
+  }
+
+  // Hydrates the expanded Network Properties pane values (v23)
+  function hydrateDevSettings() {
+    const gasInput = document.getElementById("input-gas-url");
+    const workerInput = document.getElementById("input-worker-url");
+    const keyInput = document.getElementById("input-gemini-key");
+    if (gasInput) gasInput.value = getNetworkSetting("gas_url");
+    if (workerInput) workerInput.value = getNetworkSetting("worker_url");
+    if (keyInput) keyInput.value = getNetworkSetting("gemini_key");
+  }
+
+  function toggleDevPanel() {
+    const panel = document.getElementById("dev-settings-panel");
+    const arrow = document.getElementById("dev-trigger-arrow");
+    if (panel) {
+      const isHidden = panel.classList.toggle("hidden");
+      if (arrow) {
+        arrow.style.transform = isHidden ? "rotate(0deg)" : "rotate(180deg)";
+      }
+    }
+  }
+
+  function saveDevSettings() {
+    const gasVal = document.getElementById("input-gas-url").value.trim();
+    const workerVal = document.getElementById("input-worker-url").value.trim();
+    const keyVal = document.getElementById("input-gemini-key").value.trim();
+
+    saveNetworkSetting("gas_url", gasVal);
+    saveNetworkSetting("worker_url", workerVal);
+    saveNetworkSetting("gemini_key", keyVal);
+
+    const isGAS = window.location.hostname.includes('googleusercontent.com') || window.location.hostname.includes('script.google.com') || window.location.hostname.includes('google.com');
+    if (isGAS && typeof google !== 'undefined' && google.script && google.script.run) {
+      showToast("Saving settings to server...", "info");
+      
+      const payload = {
+        gas_url: gasVal,
+        worker_url: workerVal,
+        gemini_key: keyVal
+      };
+
+      google.script.run
+        .withSuccessHandler((res) => {
+          if (res && res.success) {
+            showToast("Settings saved persistently to server!", "success");
+          } else {
+            showToast("Error saving settings to server", "error");
+          }
+        })
+        .withFailureHandler((err) => {
+          showToast(`Server persistence lock: ${err.message || err.toString()}`, "error");
+        })
+        .saveServerSettingsBulk(payload);
+    } else {
+      showToast("Settings saved to local storage!", "success");
+    }
+  }
+
+  function getPINAuth() {
+    // Simple session PIN cache for network submissions
+    return document.getElementById("login-pin").value.trim();
+  }
+
+  function togglePinVisibility() {
+    const pinInput = document.getElementById("login-pin");
+    const eyeIcon = document.getElementById("pin-eye-icon");
+    if (pinInput.type === "password") {
+      pinInput.type = "text";
+      eyeIcon.innerText = "visibility";
+    } else {
+      pinInput.type = "password";
+      eyeIcon.innerText = "visibility_off";
+    }
+  }
+
+  // 11. MOCK BACKEND LOCAL PREVIEW SYSTEM (Supports testing completely offline)
+  const MOCK_PROFILES = [
+    { email: "director@tradicion.com", pin: "3999", name: "Angel Alberto Rodriguez Serrano", id: "TD-MASTER", role: "director", gender: "male", title: "Director" },
+    { email: "dancer1@tradicion.com", pin: "2001", name: "Gabriel Rivera", id: "TD-001", role: "performer", gender: "male", title: "Dancer" },
+    { email: "dancer2@tradicion.com", pin: "2002", name: "Isabela Ortiz", id: "TD-002", role: "performer", gender: "female", title: "Dancer" },
+    { email: "darien@tradicion.com", pin: "2003", name: "Darien", id: "TD-003", role: "performer", gender: "female", title: "Sub-Director" }
+  ];
+
+  function runMockLocalAuth(email, pin) {
+    const formattedEmail = email.trim().toLowerCase();
+    const matchedUser = MOCK_PROFILES.find(u => u.email === formattedEmail);
+
+    setTimeout(() => {
+      if (!matchedUser) {
+        triggerSecurityAlert(email, "I see you are writing from " + email + ", but I don't see that email in our performer records. Reenter you email.");
+        return;
+      }
+
+      if (matchedUser.pin !== pin || (pin.charAt(0) !== '2' && pin.charAt(0) !== '3')) {
+        triggerSecurityAlert(email, "I see you are writing from " + email + ", but I don't see that code associated to that email in our performer records. Carajo, did you forget your code?");
+        return;
+      }
+
+      // Handshake successful
+      completeHandshake({
+        success: true,
+        email: matchedUser.email,
+        name: matchedUser.name,
+        performerId: matchedUser.id,
+        clearance: matchedUser.role,
+        gender: matchedUser.gender,
+        title: matchedUser.title
+      });
+    }, 1000);
+  }
+
+      function runMockAIResponse(query) {
+    const lowerQuery = query.toLowerCase();
+
+    if (currentLanguage === "es") {
+      if (/45\s*day\s*practice|45-day\s*practice|reporte\s*de\s*ensayos\s*de\s*45|practice\s*report|reporte\s*de\s*practica/i.test(lowerQuery)) {
+        return "¡Saludos, Director! Aquí tienes el **Reporte de Ensayos y Prácticas de 45 Días** de la compañía Tradición Dance Company.\n\n" +
+               "*Recuerda: Marcar 'No' en el Google Calendar es la única forma de excusar una ausencia y evitar el cargo automático de $5.*\n\n" +
+               "| Fecha | Día | Hora | Ensayo / Práctica | Enlace |\n" +
+               "| :--- | :--- | :--- | :--- | :--- |\n" +
+               "| Jun 15, 2026 | Lunes | 07:00 PM - 09:00 PM | Ensayo Regular de Bomba y Plena | [Event Link](https://calendar.google.com/) |\n" +
+               "| Jun 22, 2026 | Lunes | 07:00 PM - 09:00 PM | Ensayo General - Salsa y Estilo | [Event Link](https://calendar.google.com/) |\n" +
+               "| Jun 29, 2026 | Lunes | 07:00 PM - 09:00 PM | Práctica de Coordinación de Coreografía | [Event Link](https://calendar.google.com/) |\n" +
+               "| Jul 06, 2026 | Lunes | 07:00 PM - 09:00 PM | Ensayo Especial - Vestuario Completo | [Event Link](https://calendar.google.com/) |\n" +
+               "| Jul 13, 2026 | Lunes | 07:00 PM - 09:00 PM | Práctica General de Bomba, Plena y Salsa | [Event Link](https://calendar.google.com/) |\n\n" +
+               "¡Vámonos!";
+      }
+      if (/report\s*card|progress\s*card|reporte\s*de\s*progreso|progreso\s*de\s*performer/i.test(lowerQuery)) {
+        if (sessionUser.clearance === 'director') {
+          return "¡Saludos Patrón! Aquí tienes la lista de **Performer Report Cards (Reportes de Progreso)** para todos los bailarines **activos** de la compañía:\n\n" +
+            "| Performer | Estado | Pruebas Completadas | Penalidades de Asistencia | Pagos Pendientes | Inventario | Acuerdo Firmado | Certificado de Salud | Buddy Asignado |\n" +
+            "| :--- | :--- | :---: | :---: | :---: | :---: | :---: | :---: | :--- |\n" +
+            "| Alexandra Gomez | ACTIVE | 11 | $0.00 | $70.00 | Complete | No | No | Ingrid Plata Williams |\n" +
+            "| Aron Jimenz | ACTIVE | 10 | $30.00 | $130.00 | Complete | No | No | Luis Mario Febres |\n" +
+            "| Austin Cutlip | ACTIVE | 0 | $0.00 | $100.00 | Complete | No | No | Kristen Holmes |\n" +
+            "| Carmen Maria Santiago | ACTIVE | 11 | $25.00 | $40.00 | Complete | No | No | Darien Rodriguez |\n" +
+            "| Carolina Orellana | ACTIVE | 10 | $25.00 | $130.00 | Complete | No | No | Angel Rodriguez |\n" +
+            "| Douglas Sampson | ACTIVE | 10 | $20.00 | $40.00 | Complete | No | No | Jose Rivera-Bobea |\n" +
+            "| Edna Mayen | ACTIVE | 12 | $20.00 | $100.00 | Complete | No | No | Meyboll Menard |\n" +
+            "| Ingrid Plata Williams | ACTIVE | 2 | $25.00 | $130.00 | Complete | No | No | Alexandra Gomez |\n" +
+            "| Josey Miranda | ACTIVE | 12 | $20.00 | $130.00 | Complete | Yes | No | Angel Rodriguez |\n" +
+            "| Kristen Holmes | ACTIVE | 0 | $25.00 | $100.00 | Complete | No | No | Austin Cutlip |\n" +
+            "| Laura Puentes | ACTIVE | 0 | $0.00 | $100.00 | Complete | No | No | Mirelys Corsoro |\n" +
+            "| Luis Mario Febres | ACTIVE | 10 | $55.00 | $70.00 | Complete | No | No | Aron Jimenz |\n" +
+            "| Magdiel Miranda | ACTIVE | 12 | $10.00 | $40.00 | Complete | No | No | Paola Gonzalez |\n" +
+            "| Meyboll Menard | ACTIVE | 6 | $30.00 | $0.00 | Complete | No | No | Edna Mayen |\n" +
+            "| Mirelys Corsoro Millie | ACTIVE | 0 | $60.00 | $70.00 | Complete | No | No | Laura Puentes |\n" +
+            "| Paola Gonzalez | ACTIVE | 9 | $45.00 | $130.00 | Complete | No | No | Magdiel Miranda |\n" +
+            "| Victoria E. Rodriguez | ACTIVE | 0 | $35.00 | $130.00 | Complete | No | No | Angel Rodriguez |\n\n" +
+            "Si tienes alguna pregunta, comunícate directo con **Darien Rodriguez** al [darien140@gmail.com](mailto:darien140@gmail.com) o al 787-536-7483.\n\n" +
+            "¡Vámonos!";
+        }
+        return "¡Chacho, prepárate! Aquí tienes tu **Performer Report Card (Reporte de Progreso)** de esta semana, listo y al día en Tradición Dance Company.\n" +
+"*¡Ojo! Cumple con tus acciones pendientes para evitar penalidades adicionales, carajo.*\n\n" +
+"**INFORMACIÓN GENERAL:**\n" +
+"- **Performer:** " + (sessionUser.name || "Victoria E. Rodriguez") + "\n" +
+"- **Status:** ACTIVE (Activo)\n" +
+"- **Buddy Asignado:** Angel Rodriguez\n" +
+"- **Teléfono del Buddy:** (804) 714-5108\n\n" +
+"| Categoría e Ítems | Detalles | Acción Requerida en tu Parte |\n" +
+"| :--- | :--- | :--- |\n" +
+"| **FINANZAS Y ADMINISTRACIÓN** | | |\n" +
+"| Attendance Penalty Fees | $35 | [monthly-performer-dues](https://salsaguyrichmond.com/dues) |\n" +
+"| Practice Attendance | Review log | [Form 2 - Practice Attendance](https://salsaguyrichmond.com/attendance) |\n" +
+"| Payments Owed | $130 | [monthly-performer-dues](https://salsaguyrichmond.com/dues) |\n" +
+"| Agreement Completion | No | [Form 4 - Performer Agreement](https://salsaguyrichmond.com/agreement) |\n" +
+"| **COMPLIANCE Y EQUIPO** | | |\n" +
+"| Health Certificates Submission | No | [Health Certificate Form](https://salsaguyrichmond.com/health) |\n" +
+"| Inventory Completed | Complete | No Action required, thank you. |\n" +
+"| **PROGRESO DE ENTRENAMIENTO** | | |\n" +
+"| Training Tests Completed | 0 | [tests here](https://salsaguyrichmond.com/tests) |\n\n" +
+"Si tienes alguna pregunta, comunícate directo con **Darien Rodriguez** al [darien140@gmail.com](mailto:darien140@gmail.com) o al 787-536-7483.\n\n" +
+"¡Vámonos!";
+      }
+      if (/90\s*day|90-day|resumen de eventos|resumen de 90|event summary/i.test(lowerQuery)) {
+        return "¡Chacho, prepárate! Aquí tienes el **Resumen de Eventos de 90 Días** para el corillo de Tradición Dance Company y The Salsa Guy.\n" +
+"*¡Ojo! Si le das clic a un enlace de evento y no abre, significa que no estás incluido para ese evento, carajo.*\n\n" +
+"| Fecha | Día | Hora | Evento | Enlace |\n" +
+"| :--- | :--- | :--- | :--- | :--- |\n" +
+"| May 30, 2026 | Sábado | 03:30 PM - 03:45 PM | QUE PASA FESTIVAL | [Event Link](https://calendar.google.com/) |\n" +
+"| Jun 6, 2026 | Sábado | 04:00 PM - 07:00 PM | Tepachela Beer Release - CONFIRMED | [Event Link](https://calendar.google.com/) |\n" +
+"| Jun 27, 2026 | Sábado | 11:00 AM - 07:00 PM | 4th Annual Puerto Rican Festival | [Event Link](https://calendar.google.com/) |\n" +
+"| Jun 27, 2026 | Sábado | 01:00 PM - 08:00 PM | Multicultural Festival: Imagine 2026 | [Event Link](https://calendar.google.com/) |\n" +
+"| Aug 8, 2026 | Sábado | 11:00 AM - 12:30 PM | \"Shine your light\" latin mural opening celebration event | [Event Link](https://calendar.google.com/) |\n" +
+"| Aug 22, 2026 | Sábado | 12:00 PM - 08:00 PM | Latin Jazz Festival Bomba Performance | [Event Link](https://calendar.google.com/) |\n\n" +
+"¡Vámonos!";
+      }
+      if (/pag|dinero|transferencia|sueldo/i.test(lowerQuery)) {
+        if (sessionUser.clearance === 'director') {
+          return "¡Saludos Patrón! Aquí tienes la contabilidad total de stipends. Este ciclo hemos desembolsado $4,500 en total. Todo el corillo está al día excepto un remanente menor de congas. ¡Seguimos firmes, carajo! ¡Vámonos!";
+        } else {
+          return "¡Oye " + sessionUser.name + "! Estuve revisando la tabla de pagos en Payments. Tu Performer ID (" + sessionUser.performerId + ") registra una transferencia completada de $350 por los últimos tres talleres de Salsa y Plena en Richmond. ¡Nada de quejas por acá, a seguir puliendo esos pasos!";
+        }
+      } else if (/costume|traje|gear|instrument|conga/i.test(lowerQuery)) {
+        if (sessionUser.clearance === 'director') {
+          return "¡Patrón! El inventario está completo y resguardado en la armadura. Tenemos 15 trajes de Carnival en perfecto estado y las 4 congas corporativas operacionales. Todo bajo control.";
+        } else {
+          return "¡Escucha, " + sessionUser.name + "! Tienes asignado el traje de Carnival rojo (#CR-42) y los zapatos de gala negros en la tabla de Inventory. Cuídalos bien, carajo, que esos trajes valen oro. ¡Nos vemos en el ensayo!";
+        }
+      } else if (/asistencia|rehearsal|ensayo/i.test(lowerQuery)) {
+        if (sessionUser.clearance === 'director') {
+          return "¡Saludos Patrón! Aquí tienes el **Resumen de Asistencia a Ensayos (Attendance Status)** para todos los bailarines activos:\n\n" +
+            "| Performer | Porcentaje de Asistencia | Faltas Justificadas | Faltas Injustificadas |\n" +
+            "| :--- | :---: | :---: | :---: |\n" +
+            "| Alexandra Gomez | 100% | 0 | 0 |\n" +
+            "| Aron Jimenz | 92% | 1 | 0 |\n" +
+            "| Austin Cutlip | 85% | 2 | 1 |\n" +
+            "| Carmen Maria Santiago | 96% | 1 | 0 |\n" +
+            "| Carolina Orellana | 96% | 1 | 0 |\n" +
+            "| Douglas Sampson | 98% | 0 | 0 |\n" +
+            "| Edna Mayen | 98% | 0 | 0 |\n" +
+            "| Ingrid Plata Williams | 94% | 1 | 1 |\n" +
+            "| Josey Miranda | 98% | 0 | 0 |\n" +
+            "| Kristen Holmes | 90% | 2 | 0 |\n" +
+            "| Laura Puentes | 88% | 3 | 0 |\n" +
+            "| Luis Mario Febres | 92% | 1 | 1 |\n" +
+            "| Magdiel Miranda | 100% | 0 | 0 |\n" +
+            "| Meyboll Menard | 96% | 1 | 0 |\n" +
+            "| Mirelys Corsoro Millie | 90% | 2 | 1 |\n" +
+            "| Paola Gonzalez | 94% | 1 | 0 |\n" +
+            "| Victoria E. Rodriguez | 96% | 1 | 0 |\n\n" +
+            "¡Esa es la disciplina del corillo de Tradición, carajo! ¡Vámonos!";
+        }
+        return "¡Chacho! Según los registros de Attendance, tu porcentaje de asistencia está en un impecable 96%. Tienes una sola falta justificada por causa médica. ¡Esa es la disciplina que exige Tradición!";
+      }
+      return "¡Dime, " + sessionUser.name + "! Tu handshake está activo. Como asistente tuya y de Angel Rodriguez Serrano, te confirmo que toda la data de la Tradición Dance Company está resguardada en el Iron Vault. ¿Qué paso de salsa ensayamos hoy, carajo?";
+    } else {
+      // English persona response
+      if (/45\s*day\s*practice|45-day\s*practice|reporte\s*de\s*ensayos\s*de\s*45|practice\s*report|reporte\s*de\s*practica/i.test(lowerQuery)) {
+        return "Greetings, Director! Here is the **45-Day Practices & Rehearsals Report** for Tradición Dance Company.\n\n" +
+               "*Note: Marking 'No' on Google Calendar is the ONLY way to be excused from a practice and avoid the automatic $5 penalty fee.*\n\n" +
+               "| Date | Day | Time | Practice / Rehearsal | Link |\n" +
+               "| :--- | :--- | :--- | :--- | :--- |\n" +
+               "| Jun 15, 2026 | Monday | 07:00 PM - 09:00 PM | Regular Bomba & Plena Rehearsal | [Event Link](https://calendar.google.com/) |\n" +
+               "| Jun 22, 2026 | Monday | 07:00 PM - 09:00 PM | General Rehearsal - Salsa & Styling | [Event Link](https://calendar.google.com/) |\n" +
+               "| Jun 29, 2026 | Monday | 07:00 PM - 09:00 PM | Choreography Coordination Practice | [Event Link](https://calendar.google.com/) |\n" +
+               "| Jul 06, 2026 | Monday | 07:00 PM - 09:00 PM | Special Practice - Full Costumes | [Event Link](https://calendar.google.com/) |\n" +
+               "| Jul 13, 2026 | Monday | 07:00 PM - 09:00 PM | General Rehearsal - Salsa, Plena & Bomba | [Event Link](https://calendar.google.com/) |\n\n" +
+               "Let's dance!";
+      }
+      if (/report\s*card|progress\s*card|reporte\s*de\s*progreso|progreso\s*de\s*performer/i.test(lowerQuery)) {
+        if (sessionUser.clearance === 'director') {
+          return "Greetings Director! Here is the weekly **Performer Report Cards** progress update for all **active** dancers in Tradición Dance Company:\n\n" +
+            "| Performer | Status | Training Tests Completed | Attendance Penalty Fees | Payments Owed | Inventory | Agreement | Health Cert | Assigned Buddy |\n" +
+            "| :--- | :--- | :---: | :---: | :---: | :---: | :---: | :---: | :--- |\n" +
+            "| Alexandra Gomez | ACTIVE | 11 | $0.00 | $70.00 | Complete | No | No | Ingrid Plata Williams |\n" +
+            "| Aron Jimenz | ACTIVE | 10 | $30.00 | $130.00 | Complete | No | No | Luis Mario Febres |\n" +
+            "| Austin Cutlip | ACTIVE | 0 | $0.00 | $100.00 | Complete | No | No | Kristen Holmes |\n" +
+            "| Carmen Maria Santiago | ACTIVE | 11 | $25.00 | $40.00 | Complete | No | No | Darien Rodriguez |\n" +
+            "| Carolina Orellana | ACTIVE | 10 | $25.00 | $130.00 | Complete | No | No | Angel Rodriguez |\n" +
+            "| Douglas Sampson | ACTIVE | 10 | $20.00 | $40.00 | Complete | No | No | Jose Rivera-Bobea |\n" +
+            "| Edna Mayen | ACTIVE | 12 | $20.00 | $100.00 | Complete | No | No | Meyboll Menard |\n" +
+            "| Ingrid Plata Williams | ACTIVE | 2 | $25.00 | $130.00 | Complete | No | No | Alexandra Gomez |\n" +
+            "| Josey Miranda | ACTIVE | 12 | $20.00 | $130.00 | Complete | Yes | No | Angel Rodriguez |\n" +
+            "| Kristen Holmes | ACTIVE | 0 | $25.00 | $100.00 | Complete | No | No | Austin Cutlip |\n" +
+            "| Laura Puentes | ACTIVE | 0 | $0.00 | $100.00 | Complete | No | No | Mirelys Corsoro |\n" +
+            "| Luis Mario Febres | ACTIVE | 10 | $55.00 | $70.00 | Complete | No | No | Aron Jimenz |\n" +
+            "| Magdiel Miranda | ACTIVE | 12 | $10.00 | $40.00 | Complete | No | No | Paola Gonzalez |\n" +
+            "| Meyboll Menard | ACTIVE | 6 | $30.00 | $0.00 | Complete | No | No | Edna Mayen |\n" +
+            "| Mirelys Corsoro Millie | ACTIVE | 0 | $60.00 | $70.00 | Complete | No | No | Laura Puentes |\n" +
+            "| Paola Gonzalez | ACTIVE | 9 | $45.00 | $130.00 | Complete | No | No | Magdiel Miranda |\n" +
+            "| Victoria E. Rodriguez | ACTIVE | 0 | $35.00 | $130.00 | Complete | No | No | Angel Rodriguez |\n\n" +
+            "If you have any questions, please contact **Darien Rodriguez** at [darien140@gmail.com](mailto:darien140@gmail.com) or at 787-536-7483.\n\n" +
+            "Thank you,\n" +
+            "Tradición Dance Company";
+        }
+        return "Greetings. Here is your weekly **Performer Report Card** progress update for Tradición Dance Company.\n" +
+"*Note: Please ensure all pending actions are completed immediately to avoid administrative delays.*\n\n" +
+"**GENERAL INFORMATION:**\n" +
+"- **Performer:** " + (sessionUser.name || "Victoria E. Rodriguez") + "\n" +
+"- **Status:** ACTIVE\n" +
+"- **Assigned Buddy:** Angel Rodriguez\n" +
+"- **Buddy Phone:** (804) 714-5108\n\n" +
+"| Category & Items | Details | Action Needed on Your Part |\n" +
+"| :--- | :--- | :--- |\n" +
+"| **FINANCIAL & ADMINISTRATIVE** | | |\n" +
+"| Attendance Penalty Fees | $35 | [monthly-performer-dues](https://salsaguyrichmond.com/dues) |\n" +
+"| Practice Attendance | Review log | [Form 2 - Practice Attendance](https://salsaguyrichmond.com/attendance) |\n" +
+"| Payments Owed | $130 | [monthly-performer-dues](https://salsaguyrichmond.com/dues) |\n" +
+"| Agreement Completion | No | [Form 4 - Performer Agreement](https://salsaguyrichmond.com/agreement) |\n" +
+"| **COMPLIANCE & EQUIPMENT** | | |\n" +
+"| Health Certificates Submission | No | [Health Certificate Form](https://salsaguyrichmond.com/health) |\n" +
+"| Inventory Completed | Complete | No Action required, thank you. |\n" +
+"| **TRAINING PROGRESS** | | |\n" +
+"| Training Tests Completed | 0 | [tests here](https://salsaguyrichmond.com/tests) |\n\n" +
+"If you have any questions, please contact **Darien Rodriguez** at [darien140@gmail.com](mailto:darien140@gmail.com) or at 787-536-7483.\n\n" +
+"Thank you,\n" +
+"Tradición Dance Company";
+      }
+      if (/90\s*day|90-day|resumen de eventos|resumen de 90|event summary/i.test(lowerQuery)) {
+        return "Greetings. Here is the **90 Day Event Summary** schedule for Tradición Dance Company and The Salsa Guy.\n" +
+"*Note: If you click an event link and it does not open, that means you are not included for the event.*\n\n" +
+"| Date | Day | Time | Title | Link |\n" +
+"| :--- | :--- | :--- | :--- | :--- |\n" +
+"| May 30, 2026 | Saturday | 03:30 PM - 03:45 PM | QUE PASA FESTIVAL | [Event Link](https://calendar.google.com/) |\n" +
+"| Jun 6, 2026 | Saturday | 04:00 PM - 07:00 PM | Tepachela Beer Release - CONFIRMED | [Event Link](https://calendar.google.com/) |\n" +
+"| Jun 27, 2026 | Saturday | 11:00 AM - 07:00 PM | 4th Annual Puerto Rican Festival | [Event Link](https://calendar.google.com/) |\n" +
+"| Jun 27, 2026 | Saturday | 01:00 PM - 08:00 PM | Multicultural Festival: Imagine 2026 | [Event Link](https://calendar.google.com/) |\n" +
+"| Aug 8, 2026 | Saturday | 11:00 AM - 12:30 PM | \"Shine your light\" latin mural opening celebration event | [Event Link](https://calendar.google.com/) |\n" +
+"| Aug 22, 2026 | Saturday | 12:00 PM - 08:00 PM | Latin Jazz Festival Bomba Performance | [Event Link](https://calendar.google.com/) |\n";
+      }
+      if (/asistencia|rehearsal|ensayo|attendance/i.test(lowerQuery)) {
+        if (sessionUser.clearance === 'director') {
+          return "Greetings Director! Here is the weekly **Rehearsal Attendance History** for all active dancers:\n\n" +
+            "| Performer | Attendance Percentage | Excused Absences | Unexcused Absences |\n" +
+            "| :--- | :---: | :---: | :---: |\n" +
+            "| Alexandra Gomez | 100% | 0 | 0 |\n" +
+            "| Aron Jimenz | 92% | 1 | 0 |\n" +
+            "| Austin Cutlip | 85% | 2 | 1 |\n" +
+            "| Carmen Maria Santiago | 96% | 1 | 0 |\n" +
+            "| Carolina Orellana | 96% | 1 | 0 |\n" +
+            "| Douglas Sampson | 98% | 0 | 0 |\n" +
+            "| Edna Mayen | 98% | 0 | 0 |\n" +
+            "| Ingrid Plata Williams | 94% | 1 | 1 |\n" +
+            "| Josey Miranda | 98% | 0 | 0 |\n" +
+            "| Kristen Holmes | 90% | 2 | 0 |\n" +
+            "| Laura Puentes | 88% | 3 | 0 |\n" +
+            "| Luis Mario Febres | 92% | 1 | 1 |\n" +
+            "| Magdiel Miranda | 100% | 0 | 0 |\n" +
+            "| Meyboll Menard | 96% | 1 | 0 |\n" +
+            "| Mirelys Corsoro Millie | 90% | 2 | 1 |\n" +
+            "| Paola Gonzalez | 94% | 1 | 0 |\n" +
+            "| Victoria E. Rodriguez | 96% | 1 | 0 |\n\n" +
+            "Keep up the great discipline!";
+        }
+        return "Greetings. According to our Attendance logs, your attendance rate is at a solid 96% with only one excused medical absence. Keep up the high standard!";
+      }
+      if (/pay|money|balance/i.test(lowerQuery)) {
+        if (sessionUser.clearance === 'director') {
+          return "Director, administrative ledger summary: Total payment disbursements for this active cycle aggregate to $4,500. Operation balances are completely secure. Let me know if you require a master ledger audit sheet.";
+        } else {
+          return "Hello " + sessionUser.name + ". I have accessed the Payments ledger. Under Performer ID " + sessionUser.performerId + ", your stipend of $350 for the recent Salsa Workshops has been fully processed and approved.";
+        }
+      } else if (/costume|gear|inventory|hat|sombrero|pava/i.test(lowerQuery)) {
+        return "Performer " + sessionUser.name + ", you are currently checked out with Carnival Costume #CR-42 and standard leather performance footwear in outstanding condition. Please ensure inventory integrity is maintained at all times.";
+      }
+      return "Greetings, " + sessionUser.name + ". This is El Patrón. Your authority credentials have been fully authenticated by the Iron Vault. I am prepared to assist you with scheduling, attendance mapping, or inventory tracking.";
+    }
+  }
+
+  // === INTERACTIVE FEEDBACK INTEGRATION ===
+  function openFeedbackModal() {
+    document.getElementById("feedback-modal").classList.add("active");
+    document.getElementById("feedback-text").value = "";
+  }
+
+  function closeFeedbackModal() {
+    document.getElementById("feedback-modal").classList.remove("active");
+  }
+
+  function submitFeedback() {
+    const feedbackVal = document.getElementById("feedback-text").value.trim();
+    if (!feedbackVal) {
+      showCustomDialog("Validation Error", "Please write something before submitting, carajo!");
+      return;
+    }
+
+    const email = safeGetItem("email_auth") || document.getElementById("login-email").value;
+    const pin = safeGetItem("pin_auth") || document.getElementById("login-pin").value;
+
+    const btn = document.getElementById("btn-submit-feedback");
+    btn.disabled = true;
+    btn.innerText = "Submitting...";
+
+    const isHybrid = document.getElementById("architecture-toggle").classList.contains("active");
+
+    if (isHybrid) {
+      // Hybrid Mode (POST fetch to Cloudflare Worker Router)
+      const workerUrl = getNetworkSetting("worker_url");
+      const appsScriptUrl = getNetworkSetting("gas_url");
+      const geminiKey = getNetworkSetting("gemini_key");
+
+      fetch(workerUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Apps-Script-Url": appsScriptUrl,
+          "X-Gemini-Key": geminiKey
+        },
+        body: JSON.stringify({
+          email: email,
+          pin: pin,
+          action: "submitFeedback",
+          feedback: feedbackVal,
+          query: "Submit feedback action"
+        })
+      })
+        .then(res => res.json())
+        .then(data => {
+          btn.disabled = false;
+          btn.innerHTML = "Submit";
+          if (data.success) {
+            closeFeedbackModal();
+            showCustomDialog("Success", "Your feedback was sent directly to App_Feedback sheet, carajo!");
+            updateFeedbackCounter();
+          } else {
+            showCustomDialog("Submitting Error", data.error || "An error occurred.");
+          }
+        })
+        .catch(err => {
+          btn.disabled = false;
+          btn.innerHTML = "Submit";
+          showCustomDialog("Connection Failed", "Could not connect to Edge router: " + err.toString());
+        });
+    } else {
+      // Native Mode (direct Apps Script google.script.run)
+      google.script.run
+        .withSuccessHandler(function (data) {
+          btn.disabled = false;
+          btn.innerHTML = "Submit";
+          if (data.success) {
+            closeFeedbackModal();
+            showCustomDialog("Success", "Your feedback was sent directly to App_Feedback sheet, carajo!");
+            updateFeedbackCounter();
+          } else {
+            showCustomDialog("Submitting Error", data.error || "An error occurred.");
+          }
+        })
+        .withFailureHandler(function (err) {
+          btn.disabled = false;
+          btn.innerHTML = "Submit";
+          showCustomDialog("Execution Error", err.toString());
+        })
+        .directSubmitFeedback(email, pin, feedbackVal);
+    }
+  }
+
+  function updateFeedbackCounter() {
+    if (!sessionUser) return;
+    const email = sessionUser.email;
+    const pin = getPINAuth();
+
+    const label = document.getElementById("sidebar-feedback-label");
+    if (!label) return;
+
+    // Dynamically localize feedback prefix text (v23)
+    const prefixText = currentLanguage === 'es' ? "Enviar Feedback" : "Submit Feedback";
+    const isHybrid = document.getElementById("architecture-toggle").classList.contains("active");
+
+    if (isHybrid) {
+      const workerUrl = getNetworkSetting("worker_url");
+      const appsScriptUrl = getNetworkSetting("gas_url");
+      const geminiKey = getNetworkSetting("gemini_key");
+
+      fetch(workerUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Apps-Script-Url": appsScriptUrl,
+          "X-Gemini-Key": geminiKey
+        },
+        body: JSON.stringify({
+          email: email,
+          pin: pin,
+          getFeedbackStats: true,
+          query: "Get feedback stats"
+        })
+      })
+        .then(res => res.json())
+        .then(data => {
+          if (data.success) {
+            label.innerHTML = prefixText + ' <span class="feedback-badge">' + data.pending + 'P / ' + data.completed + 'C</span>';
+          }
+        })
+        .catch(err => console.error("Failed to load feedback stats: ", err));
+    } else {
+      if (typeof google !== 'undefined' && google.script && google.script.run) {
+        google.script.run
+          .withSuccessHandler(function (data) {
+            if (data && data.success) {
+              label.innerHTML = prefixText + ' <span class="feedback-badge">' + data.pending + 'P / ' + data.completed + 'C</span>';
+            }
+          })
+          .withFailureHandler(function (err) {
+            console.error("Feedback stats execution error: ", err);
+          })
+          .getFeedbackStats(email, pin);
+      } else {
+        // Offline fallback / Mock local preview runner
+        const mockList = getLocalMockFeedbackList();
+        const pendingCount = mockList.filter(r => r.status === "Pending").length;
+        const completedCount = mockList.filter(r => r.status === "Completed").length;
+        label.innerHTML = prefixText + ' <span class="feedback-badge">' + pendingCount + 'P / ' + completedCount + 'C</span>';
+      }
+    }
+  }
+
+  // === ADMINISTRATIVE FEEDBACK LEDGER PIPELINES (Level 3 Directors only) ===
+  let activeFeedbackList = [];
+  let activeFeedbackFilter = "all";
+
+  function openFeedbackAdminModal() {
+    document.getElementById("feedback-admin-modal").classList.add("active");
+    fetchFeedbackAdminList();
+  }
+
+  function closeFeedbackAdminModal() {
+    document.getElementById("feedback-admin-modal").classList.remove("active");
+  }
+
+  function fetchFeedbackAdminList() {
+    const tableBody = document.getElementById("feedback-admin-table-body");
+    tableBody.innerHTML = `<tr><td colspan="5" style="text-align: center; color: var(--text-muted); padding: 30px;">Loading feedback records... <span class="material-icons-round spin" style="font-size: 14px; vertical-align: middle;">sync</span></td></tr>`;
+
+    const email = sessionUser.email;
+    const pin = getPINAuth();
+    const isHybrid = document.getElementById("architecture-toggle").classList.contains("active");
+
+    if (isHybrid) {
+      const workerUrl = getNetworkSetting("worker_url");
+      const appsScriptUrl = getNetworkSetting("gas_url");
+      const geminiKey = getNetworkSetting("gemini_key");
+
+      fetch(workerUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Apps-Script-Url": appsScriptUrl,
+          "X-Gemini-Key": geminiKey
+        },
+        body: JSON.stringify({
+          email: email,
+          pin: pin,
+          action: "getFeedbackList",
+          query: "Get feedback list action"
+        })
+      })
+        .then(res => res.json())
+        .then(data => {
+          if (data.success) {
+            activeFeedbackList = data.feedbackList || [];
+            renderFeedbackAdminTable();
+            updateFeedbackAdminStats();
+          } else {
+            tableBody.innerHTML = `<tr><td colspan="5" style="text-align: center; color: #ef4444; padding: 30px;">Error loading: ${data.error}</td></tr>`;
+          }
+        })
+        .catch(err => {
+          tableBody.innerHTML = `<tr><td colspan="5" style="text-align: center; color: #ef4444; padding: 30px;">Edge connection error: ${err.toString()}</td></tr>`;
+        });
+    } else {
+      if (typeof google !== 'undefined' && google.script && google.script.run) {
+        google.script.run
+          .withSuccessHandler(function (data) {
+            if (data && data.success) {
+              activeFeedbackList = data.feedbackList || [];
+              renderFeedbackAdminTable();
+              updateFeedbackAdminStats();
+            } else {
+              tableBody.innerHTML = `<tr><td colspan="5" style="text-align: center; color: #ef4444; padding: 30px;">Error loading: ${data.error}</td></tr>`;
+            }
+          })
+          .withFailureHandler(function (err) {
+            tableBody.innerHTML = `<tr><td colspan="5" style="text-align: center; color: #ef4444; padding: 30px;">Execution error: ${err.toString()}</td></tr>`;
+          })
+          .getFeedbackList(email, pin);
+      } else {
+        // Offline / Local Mock environment simulation
+        setTimeout(() => {
+          activeFeedbackList = getLocalMockFeedbackList();
+          renderFeedbackAdminTable();
+          updateFeedbackAdminStats();
+        }, 600);
+      }
+    }
+  }
+
+  function renderFeedbackAdminTable() {
+    const tableBody = document.getElementById("feedback-admin-table-body");
+    tableBody.innerHTML = "";
+
+    const filtered = activeFeedbackList.filter(row => {
+      if (activeFeedbackFilter === "all") return true;
+      return row.status === activeFeedbackFilter;
+    });
+
+    if (filtered.length === 0) {
+      tableBody.innerHTML = `<tr><td colspan="5" style="text-align: center; color: var(--text-muted); padding: 30px;">No feedback submissions found matching filter "${activeFeedbackFilter}".</td></tr>`;
+      return;
+    }
+
+    filtered.forEach(row => {
+      const tr = document.createElement("tr");
+
+      const selectPendingSelected = row.status === "Pending" ? "selected" : "";
+      const selectCompletedSelected = row.status === "Completed" ? "selected" : "";
+      const statusClass = row.status === "Completed" ? "completed" : "pending";
+
+      tr.innerHTML = `
+        <td class="feedback-row-timestamp">${row.timestamp}</td>
+        <td class="feedback-row-email">${row.email}</td>
+        <td class="feedback-row-text">${row.feedback}</td>
+        <td>
+          <div class="status-select-wrapper">
+            <select class="status-select ${statusClass}" onchange="handleFeedbackStatusChange(${row.rowIndex}, this)">
+              <option value="Pending" ${selectPendingSelected}>Pending</option>
+              <option value="Completed" ${selectCompletedSelected}>Completed</option>
+            </select>
+          </div>
+        </td>
+        <td>
+          <textarea class="feedback-row-comments" placeholder="Add administrative comment..." onblur="handleFeedbackCommentBlur(${row.rowIndex}, this)">${row.comments || ""}</textarea>
+        </td>
+      `;
+      tableBody.appendChild(tr);
+    });
+  }
+
+  function filterFeedbackList(filter) {
+    activeFeedbackFilter = filter;
+
+    // Toggle active filter button states
+    document.getElementById("filter-btn-all").classList.remove("active");
+    document.getElementById("filter-btn-pending").classList.remove("active");
+    document.getElementById("filter-btn-completed").classList.remove("active");
+
+    if (filter === "all") document.getElementById("filter-btn-all").classList.add("active");
+    else if (filter === "Pending") document.getElementById("filter-btn-pending").classList.add("active");
+    else if (filter === "Completed") document.getElementById("filter-btn-completed").classList.add("active");
+
+    renderFeedbackAdminTable();
+  }
+
+  function updateFeedbackAdminStats() {
+    const total = activeFeedbackList.length;
+    const pending = activeFeedbackList.filter(r => r.status === "Pending").length;
+    const completed = activeFeedbackList.filter(r => r.status === "Completed").length;
+
+    document.getElementById("stat-total-val").innerText = total;
+    document.getElementById("stat-pending-val").innerText = pending;
+    document.getElementById("stat-completed-val").innerText = completed;
+  }
+
+  function handleFeedbackStatusChange(rowIndex, selectEl) {
+    const newStatus = selectEl.value;
+
+    // Instantly update local class for beautiful live neon glow styling transition
+    selectEl.className = `status-select ${newStatus.toLowerCase()}`;
+
+    const email = sessionUser.email;
+    const pin = getPINAuth();
+    const isHybrid = document.getElementById("architecture-toggle").classList.contains("active");
+
+    // Show toast for visual confirmation
+    showToast(`Updating feedback status to ${newStatus}...`, "info");
+
+    if (isHybrid) {
+      const workerUrl = getNetworkSetting("worker_url");
+      const appsScriptUrl = getNetworkSetting("gas_url");
+      const geminiKey = getNetworkSetting("gemini_key");
+
+      fetch(workerUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Apps-Script-Url": appsScriptUrl,
+          "X-Gemini-Key": geminiKey
+        },
+        body: JSON.stringify({
+          email: email,
+          pin: pin,
+          action: "updateFeedbackStatus",
+          rowIndex: rowIndex,
+          newStatus: newStatus,
+          query: "Update feedback status action"
+        })
+      })
+        .then(res => res.json())
+        .then(data => {
+          if (data.success) {
+            showToast(`Feedback updated to ${newStatus}!`, "success");
+            // Sync active list item state
+            const item = activeFeedbackList.find(r => r.rowIndex === rowIndex);
+            if (item) item.status = newStatus;
+            updateFeedbackAdminStats();
+            updateFeedbackCounter();
+          } else {
+            showCustomDialog("Update Error", data.error || "An error occurred.");
+          }
+        })
+        .catch(err => showCustomDialog("Update Failed", "Could not connect to Edge router: " + err.toString()));
+    } else {
+      if (typeof google !== 'undefined' && google.script && google.script.run) {
+        google.script.run
+          .withSuccessHandler(function (data) {
+            if (data && data.success) {
+              showToast(`Feedback updated to ${newStatus}!`, "success");
+              const item = activeFeedbackList.find(r => r.rowIndex === rowIndex);
+              if (item) item.status = newStatus;
+              updateFeedbackAdminStats();
+              updateFeedbackCounter();
+            } else {
+              showCustomDialog("Update Error", data.error || "An error occurred.");
+            }
+          })
+          .withFailureHandler(function (err) {
+            showCustomDialog("Execution Error", err.toString());
+          })
+          .updateFeedbackStatus(email, pin, rowIndex, newStatus);
+      } else {
+        // Offline preview mock persistence
+        const item = activeFeedbackList.find(r => r.rowIndex === rowIndex);
+        if (item) item.status = newStatus;
+        saveLocalMockFeedbackList();
+        updateFeedbackAdminStats();
+        updateFeedbackCounter();
+        showToast(`Feedback status updated in offline mock db!`, "success");
+      }
+    }
+  }
+
+  function handleFeedbackCommentBlur(rowIndex, textareaEl) {
+    const commentsVal = textareaEl.value.trim();
+    const email = sessionUser.email;
+    const pin = getPINAuth();
+    const isHybrid = document.getElementById("architecture-toggle").classList.contains("active");
+
+    const item = activeFeedbackList.find(r => r.rowIndex === rowIndex);
+    if (item && item.comments === commentsVal) {
+      return; // Do nothing if comment wasn't modified
+    }
+
+    showToast("Saving director comments...", "info");
+
+    if (isHybrid) {
+      const workerUrl = getNetworkSetting("worker_url");
+      const appsScriptUrl = getNetworkSetting("gas_url");
+      const geminiKey = getNetworkSetting("gemini_key");
+
+      fetch(workerUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Apps-Script-Url": appsScriptUrl,
+          "X-Gemini-Key": geminiKey
+        },
+        body: JSON.stringify({
+          email: email,
+          pin: pin,
+          action: "updateFeedbackStatus",
+          rowIndex: rowIndex,
+          comments: commentsVal,
+          query: "Update feedback comments action"
+        })
+      })
+        .then(res => res.json())
+        .then(data => {
+          if (data.success) {
+            showToast("Director comments saved!", "success");
+            if (item) item.comments = commentsVal;
+          } else {
+            showToast("Failed to save comments", "error");
+          }
+        })
+        .catch(err => console.error("Edge comment update failed", err));
+    } else {
+      if (typeof google !== 'undefined' && google.script && google.script.run) {
+        google.script.run
+          .withSuccessHandler(function (data) {
+            if (data && data.success) {
+              showToast("Director comments saved!", "success");
+              if (item) item.comments = commentsVal;
+            } else {
+              showToast("Failed to save comments", "error");
+            }
+          })
+          .withFailureHandler(function (err) {
+            console.error("Comment execution error", err);
+          })
+          .updateFeedbackStatus(email, pin, rowIndex, undefined, commentsVal);
+      } else {
+        // Offline preview mock persistence
+        if (item) item.comments = commentsVal;
+        saveLocalMockFeedbackList();
+        showToast("Director comments saved in offline mock db!", "success");
+      }
+    }
+  }
+
+  // === LOCAL OFFLINE SIMULATION FEEDBACK MOCK DATA ENGINE ===
+  const MOCK_STORAGE_KEY = "tradicion_mock_feedback_ledger";
+
+  function getLocalMockFeedbackList() {
+    try {
+      const persisted = safeGetItem(MOCK_STORAGE_KEY);
+      if (persisted) {
+        return JSON.parse(persisted);
+      }
+    } catch (e) {
+      console.warn("Mock DB retrieval error", e);
+    }
+
+    // Initial seeded mock data for beautiful offline presentation
+    const seed = [
+      {
+        rowIndex: 2,
+        timestamp: "Monday, May 25, 2026, 2:43 PM",
+        email: "dancer.ramon@correo.com",
+        feedback: "Correction: The date of the upcoming rehearsal in my schedule is set to June 15, not June 12. Can you please confirm which is correct?",
+        status: "Pending",
+        comments: ""
+      },
+      {
+        rowIndex: 3,
+        timestamp: "Sunday, May 24, 2026, 11:15 AM",
+        email: "dancer.sofia@correo.com",
+        feedback: "Costume balance audit: Carnival red dress check has been verified and registered on the inventory sheet. Thank you, El Patrón!",
+        status: "Completed",
+        comments: "Verified with inventory log."
+      },
+      {
+        rowIndex: 4,
+        timestamp: "Saturday, May 23, 2026, 6:30 PM",
+        email: "dancer.carlos@correo.com",
+        feedback: "Bomba rhythm quiz scores shows TD-UNKNOWN for my member ID, please update my ID to TD-104 on the Quizzes ledger tab.",
+        status: "Pending",
+        comments: ""
+      }
+    ];
+    safeSetItem(MOCK_STORAGE_KEY, JSON.stringify(seed));
+    return seed;
+  }
+
+  function saveLocalMockFeedbackList() {
+    try {
+      safeSetItem(MOCK_STORAGE_KEY, JSON.stringify(activeFeedbackList));
+    } catch (e) {
+      console.error("Mock DB persistence error", e);
+    }
+  }
+
+  // === INVENTORY CHANGE SUBMISSION CONTROLLERS ===
+  function openInventoryChangeModal() {
+    document.getElementById("inventory-change-modal").classList.add("active");
+    document.getElementById("inventory-item-id").value = "";
+    document.getElementById("inventory-item-desc").value = "";
+    document.getElementById("inventory-notes").value = "";
+  }
+
+  function closeInventoryChangeModal() {
+    document.getElementById("inventory-change-modal").classList.remove("active");
+  }
+
+  function submitInventoryChange() {
+    const itemIdVal = document.getElementById("inventory-item-id").value.trim();
+    const itemDescVal = document.getElementById("inventory-item-desc").value.trim();
+    const notesVal = document.getElementById("inventory-notes").value.trim();
+
+    if (!itemIdVal || !itemDescVal) {
+      showCustomDialog("Validation Error", "Please fill in both Item ID and Item Description, carajo!");
+      return;
+    }
+
+    const email = safeGetItem("email_auth") || document.getElementById("login-email").value;
+    const pin = safeGetItem("pin_auth") || document.getElementById("login-pin").value;
+
+    const btn = document.getElementById("btn-submit-inventory");
+    btn.disabled = true;
+    btn.innerText = "Submitting...";
+
+    const isHybrid = document.getElementById("architecture-toggle").classList.contains("active");
+
+    if (isHybrid) {
+      const workerUrl = getNetworkSetting("worker_url");
+      const appsScriptUrl = getNetworkSetting("gas_url");
+      const geminiKey = getNetworkSetting("gemini_key");
+
+      fetch(workerUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Apps-Script-Url": appsScriptUrl,
+          "X-Gemini-Key": geminiKey
+        },
+        body: JSON.stringify({
+          email: email,
+          pin: pin,
+          action: "submitInventoryChange",
+          itemId: itemIdVal,
+          description: itemDescVal,
+          notes: notesVal,
+          query: "Submit inventory change action"
+        })
+      })
+        .then(res => res.json())
+        .then(data => {
+          btn.disabled = false;
+          btn.innerText = "Submit";
+          if (data.success) {
+            closeInventoryChangeModal();
+            showCustomDialog("Success", "Your inventory change request was submitted successfully, carajo!");
+            updateInventoryCounter();
+          } else {
+            showCustomDialog("Submitting Error", data.error || "An error occurred.");
+          }
+        })
+        .catch(err => {
+          btn.disabled = false;
+          btn.innerText = "Submit";
+          showCustomDialog("Connection Failed", "Could not connect to Edge router: " + err.toString());
+        });
+    } else {
+      if (typeof google !== 'undefined' && google.script && google.script.run) {
+        google.script.run
+          .withSuccessHandler(function (data) {
+            btn.disabled = false;
+            btn.innerText = "Submit";
+            if (data.success) {
+              closeInventoryChangeModal();
+              showCustomDialog("Success", "Your inventory change request was submitted successfully, carajo!");
+              updateInventoryCounter();
+            } else {
+              showCustomDialog("Submitting Error", data.error || "An error occurred.");
+            }
+          })
+          .withFailureHandler(function (err) {
+            btn.disabled = false;
+            btn.innerText = "Submit";
+            showCustomDialog("Execution Error", err.toString());
+          })
+          .directSubmitInventoryChange(email, pin, itemIdVal, itemDescVal, notesVal);
+      } else {
+        // Offline / Local Mock persistence
+        setTimeout(() => {
+          btn.disabled = false;
+          btn.innerText = "Submit";
+          const mockList = getLocalMockInventoryList();
+          const nextIndex = mockList.length > 0 ? Math.max(...mockList.map(r => r.rowIndex)) + 1 : 2;
+          mockList.push({
+            rowIndex: nextIndex,
+            timestamp: formatCalendarTime(new Date()),
+            email: email,
+            itemId: itemIdVal,
+            description: itemDescVal,
+            notes: notesVal,
+            status: "Pending",
+            comments: ""
+          });
+          saveLocalMockInventoryList(mockList);
+          closeInventoryChangeModal();
+          showCustomDialog("Success (Offline)", "Inventory change request saved to local mock database!");
+          updateInventoryCounter();
+        }, 500);
+      }
+    }
+  }
+
+  function updateInventoryCounter() {
+    if (!sessionUser) return;
+    const email = sessionUser.email;
+    const pin = getPINAuth();
+
+    const label = document.getElementById("sidebar-inventory-change-label");
+    if (!label) return;
+
+    const prefixText = currentLanguage === 'es' ? "Cambio de Inventario" : "Inventory Change";
+    const isHybrid = document.getElementById("architecture-toggle").classList.contains("active");
+
+    if (isHybrid) {
+      const workerUrl = getNetworkSetting("worker_url");
+      const appsScriptUrl = getNetworkSetting("gas_url");
+      const geminiKey = getNetworkSetting("gemini_key");
+
+      fetch(workerUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Apps-Script-Url": appsScriptUrl,
+          "X-Gemini-Key": geminiKey
+        },
+        body: JSON.stringify({
+          email: email,
+          pin: pin,
+          action: "getInventoryStats",
+          query: "Get inventory stats"
+        })
+      })
+        .then(res => res.json())
+        .then(data => {
+          if (data.success) {
+            label.innerHTML = prefixText + ' <span class="feedback-badge">' + data.pending + 'P / ' + data.completed + 'C</span>';
+          }
+        })
+        .catch(err => console.error("Failed to load inventory stats: ", err));
+    } else {
+      if (typeof google !== 'undefined' && google.script && google.script.run) {
+        google.script.run
+          .withSuccessHandler(function (data) {
+            if (data && data.success) {
+              label.innerHTML = prefixText + ' <span class="feedback-badge">' + data.pending + 'P / ' + data.completed + 'C</span>';
+            }
+          })
+          .withFailureHandler(function (err) {
+            console.error("Inventory stats execution error: ", err);
+          })
+          .getInventoryStats(email, pin);
+      } else {
+        // Offline fallback
+        const mockList = getLocalMockInventoryList();
+        const pendingCount = mockList.filter(r => r.status === "Pending").length;
+        const completedCount = mockList.filter(r => r.status === "Completed").length;
+        label.innerHTML = prefixText + ' <span class="feedback-badge">' + pendingCount + 'P / ' + completedCount + 'C</span>';
+      }
+    }
+  }
+
+  // === ADMINISTRATIVE INVENTORY LEDGER CONTROLLERS ===
+  let activeInventoryList = [];
+  let activeInventoryFilter = "all";
+
+  function openInventoryAdminModal() {
+    document.getElementById("inventory-admin-modal").classList.add("active");
+    fetchInventoryAdminList();
+  }
+
+  function closeInventoryAdminModal() {
+    document.getElementById("inventory-admin-modal").classList.remove("active");
+  }
+
+  function fetchInventoryAdminList() {
+    const tableBody = document.getElementById("inventory-admin-table-body");
+    tableBody.innerHTML = `<tr><td colspan="7" style="text-align: center; color: var(--text-muted); padding: 30px;">Loading inventory records... <span class="material-icons-round spin" style="font-size: 14px; vertical-align: middle;">sync</span></td></tr>`;
+
+    const email = sessionUser.email;
+    const pin = getPINAuth();
+    const isHybrid = document.getElementById("architecture-toggle").classList.contains("active");
+
+    if (isHybrid) {
+      const workerUrl = getNetworkSetting("worker_url");
+      const appsScriptUrl = getNetworkSetting("gas_url");
+      const geminiKey = getNetworkSetting("gemini_key");
+
+      fetch(workerUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Apps-Script-Url": appsScriptUrl,
+          "X-Gemini-Key": geminiKey
+        },
+        body: JSON.stringify({
+          email: email,
+          pin: pin,
+          action: "getInventoryList",
+          query: "Get inventory list action"
+        })
+      })
+        .then(res => res.json())
+        .then(data => {
+          if (data.success) {
+            activeInventoryList = data.inventoryList || [];
+            renderInventoryAdminTable();
+            updateInventoryAdminStats();
+          } else {
+            tableBody.innerHTML = `<tr><td colspan="7" style="text-align: center; color: #ef4444; padding: 30px;">Error loading: ${data.error}</td></tr>`;
+          }
+        })
+        .catch(err => {
+          tableBody.innerHTML = `<tr><td colspan="7" style="text-align: center; color: #ef4444; padding: 30px;">Edge connection error: ${err.toString()}</td></tr>`;
+        });
+    } else {
+      if (typeof google !== 'undefined' && google.script && google.script.run) {
+        google.script.run
+          .withSuccessHandler(function (data) {
+            if (data && data.success) {
+              activeInventoryList = data.inventoryList || [];
+              renderInventoryAdminTable();
+              updateInventoryAdminStats();
+            } else {
+              tableBody.innerHTML = `<tr><td colspan="7" style="text-align: center; color: #ef4444; padding: 30px;">Error loading: ${data.error}</td></tr>`;
+            }
+          })
+          .withFailureHandler(function (err) {
+            tableBody.innerHTML = `<tr><td colspan="7" style="text-align: center; color: #ef4444; padding: 30px;">Execution error: ${err.toString()}</td></tr>`;
+          })
+          .getInventoryList(email, pin);
+      } else {
+        // Offline preview mock simulation
+        setTimeout(() => {
+          activeInventoryList = getLocalMockInventoryList();
+          renderInventoryAdminTable();
+          updateInventoryAdminStats();
+        }, 600);
+      }
+    }
+  }
+
+  function renderInventoryAdminTable() {
+    const tableBody = document.getElementById("inventory-admin-table-body");
+    tableBody.innerHTML = "";
+
+    const filtered = activeInventoryList.filter(row => {
+      if (activeInventoryFilter === "all") return true;
+      return row.status === activeInventoryFilter;
+    });
+
+    if (filtered.length === 0) {
+      tableBody.innerHTML = `<tr><td colspan="7" style="text-align: center; color: var(--text-muted); padding: 30px;">No inventory changes found matching filter "${activeInventoryFilter}".</td></tr>`;
+      return;
+    }
+
+    filtered.forEach(row => {
+      const tr = document.createElement("tr");
+
+      const selectPendingSelected = row.status === "Pending" ? "selected" : "";
+      const selectCompletedSelected = row.status === "Completed" ? "selected" : "";
+      const statusClass = row.status === "Completed" ? "completed" : "pending";
+
+      tr.innerHTML = `
+        <td class="feedback-row-timestamp">${row.timestamp}</td>
+        <td class="feedback-row-email">${row.email}</td>
+        <td class="feedback-row-email">${row.itemId}</td>
+        <td class="feedback-row-text">${row.description}</td>
+        <td class="feedback-row-text">${row.notes || ""}</td>
+        <td>
+          <div class="status-select-wrapper">
+            <select class="status-select ${statusClass}" onchange="handleInventoryStatusChange(${row.rowIndex}, this)">
+              <option value="Pending" ${selectPendingSelected}>Pending</option>
+              <option value="Completed" ${selectCompletedSelected}>Completed</option>
+            </select>
+          </div>
+        </td>
+        <td>
+          <textarea class="feedback-row-comments" placeholder="Add administrative comment..." onblur="handleInventoryCommentBlur(${row.rowIndex}, this)">${row.comments || ""}</textarea>
+        </td>
+      `;
+      tableBody.appendChild(tr);
+    });
+  }
+
+  function filterInventoryList(filter) {
+    activeInventoryFilter = filter;
+
+    document.getElementById("inventory-filter-btn-all").classList.remove("active");
+    document.getElementById("inventory-filter-btn-pending").classList.remove("active");
+    document.getElementById("inventory-filter-btn-completed").classList.remove("active");
+
+    if (filter === "all") document.getElementById("inventory-filter-btn-all").classList.add("active");
+    else if (filter === "Pending") document.getElementById("inventory-filter-btn-pending").classList.add("active");
+    else if (filter === "Completed") document.getElementById("inventory-filter-btn-completed").classList.add("active");
+
+    renderInventoryAdminTable();
+  }
+
+  function updateInventoryAdminStats() {
+    const total = activeInventoryList.length;
+    const pending = activeInventoryList.filter(r => r.status === "Pending").length;
+    const completed = activeInventoryList.filter(r => r.status === "Completed").length;
+
+    document.getElementById("inventory-stat-total-val").innerText = total;
+    document.getElementById("inventory-stat-pending-val").innerText = pending;
+    document.getElementById("inventory-stat-completed-val").innerText = completed;
+  }
+
+  function handleInventoryStatusChange(rowIndex, selectEl) {
+    const newStatus = selectEl.value;
+    selectEl.className = `status-select ${newStatus.toLowerCase()}`;
+
+    const email = sessionUser.email;
+    const pin = getPINAuth();
+    const isHybrid = document.getElementById("architecture-toggle").classList.contains("active");
+
+    showToast(`Updating inventory status to ${newStatus}...`, "info");
+
+    const item = activeInventoryList.find(r => r.rowIndex === rowIndex);
+    const comments = item ? item.comments : "";
+
+    if (isHybrid) {
+      const workerUrl = getNetworkSetting("worker_url");
+      const appsScriptUrl = getNetworkSetting("gas_url");
+      const geminiKey = getNetworkSetting("gemini_key");
+
+      fetch(workerUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Apps-Script-Url": appsScriptUrl,
+          "X-Gemini-Key": geminiKey
+        },
+        body: JSON.stringify({
+          email: email,
+          pin: pin,
+          action: "updateInventoryStatus",
+          rowIndex: rowIndex,
+          newStatus: newStatus,
+          comments: comments,
+          query: "Update inventory status action"
+        })
+      })
+        .then(res => res.json())
+        .then(data => {
+          if (data.success) {
+            showToast("Inventory status updated successfully!", "success");
+            if (item) item.status = newStatus;
+            updateInventoryAdminStats();
+            updateInventoryCounter();
+          } else {
+            showCustomDialog("Update Error", data.error || "Failed to update status.");
+          }
+        })
+        .catch(err => showCustomDialog("Update Failed", err.toString()));
+    } else {
+      if (typeof google !== 'undefined' && google.script && google.script.run) {
+        google.script.run
+          .withSuccessHandler(function (data) {
+            if (data && data.success) {
+              showToast("Inventory status updated successfully!", "success");
+              if (item) item.status = newStatus;
+              updateInventoryAdminStats();
+              updateInventoryCounter();
+            } else {
+              showCustomDialog("Update Error", data.error || "Failed to update status.");
+            }
+          })
+          .withFailureHandler(function (err) {
+            showCustomDialog("Execution Error", err.toString());
+          })
+          .updateInventoryStatus(email, pin, rowIndex, newStatus, comments);
+      } else {
+        // Offline preview mock persistence
+        if (item) item.status = newStatus;
+        saveLocalMockInventoryList(activeInventoryList);
+        showToast("Status updated in offline mock db!", "success");
+        updateInventoryAdminStats();
+        updateInventoryCounter();
+      }
+    }
+  }
+
+  function handleInventoryCommentBlur(rowIndex, textareaEl) {
+    const commentsVal = textareaEl.value.trim();
+    const item = activeInventoryList.find(r => r.rowIndex === rowIndex);
+    if (item && item.comments === commentsVal) return;
+
+    const email = sessionUser.email;
+    const pin = getPINAuth();
+    const isHybrid = document.getElementById("architecture-toggle").classList.contains("active");
+
+    const status = item ? item.status : "Pending";
+
+    showToast("Saving administrative comment...", "info");
+
+    if (isHybrid) {
+      const workerUrl = getNetworkSetting("worker_url");
+      const appsScriptUrl = getNetworkSetting("gas_url");
+      const geminiKey = getNetworkSetting("gemini_key");
+
+      fetch(workerUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Apps-Script-Url": appsScriptUrl,
+          "X-Gemini-Key": geminiKey
+        },
+        body: JSON.stringify({
+          email: email,
+          pin: pin,
+          action: "updateInventoryStatus",
+          rowIndex: rowIndex,
+          newStatus: status,
+          comments: commentsVal,
+          query: "Update inventory comments action"
+        })
+      })
+        .then(res => res.json())
+        .then(data => {
+          if (data.success) {
+            showToast("Director comments saved successfully!", "success");
+            if (item) item.comments = commentsVal;
+          } else {
+            showCustomDialog("Save Error", data.error || "Failed to save comment.");
+          }
+        })
+        .catch(err => showCustomDialog("Update Failed", err.toString()));
+    } else {
+      if (typeof google !== 'undefined' && google.script && google.script.run) {
+        google.script.run
+          .withSuccessHandler(function (data) {
+            if (data && data.success) {
+              showToast("Director comments saved successfully!", "success");
+              if (item) item.comments = commentsVal;
+            } else {
+              showCustomDialog("Save Error", data.error || "Failed to save comment.");
+            }
+          })
+          .withFailureHandler(function (err) {
+            showCustomDialog("Execution Error", err.toString());
+          })
+          .updateInventoryStatus(email, pin, rowIndex, status, commentsVal);
+      } else {
+        // Offline preview mock persistence
+        if (item) item.comments = commentsVal;
+        saveLocalMockInventoryList(activeInventoryList);
+        showToast("Director comments saved in offline mock db!", "success");
+      }
+    }
+  }
+
+  const MOCK_INVENTORY_STORAGE_KEY = "tradicion_mock_inventory_ledger";
+
+  function getLocalMockInventoryList() {
+    try {
+      const persisted = safeGetItem(MOCK_INVENTORY_STORAGE_KEY);
+      if (persisted) {
+        return JSON.parse(persisted);
+      }
+    } catch (e) {
+      console.warn("Mock DB retrieval error", e);
+    }
+
+    const seed = [
+      {
+        rowIndex: 2,
+        timestamp: "Monday, May 25, 2026, 3:00 PM",
+        email: "dancer.ramon@correo.com",
+        itemId: "C-101",
+        description: "Carnival Red Dress size M",
+        notes: "Requesting a replacement as the zipper is damaged.",
+        status: "Pending",
+        comments: ""
+      },
+      {
+        rowIndex: 3,
+        timestamp: "Sunday, May 24, 2026, 1:15 PM",
+        email: "dancer.sofia@correo.com",
+        itemId: "TD-Conga-1",
+        description: "LP Classic Model Conga Drum",
+        notes: "Skin replaced and tuned. Ready for the next event.",
+        status: "Completed",
+        comments: "Confirmed by inventory log."
+      }
+    ];
+    safeSetItem(MOCK_INVENTORY_STORAGE_KEY, JSON.stringify(seed));
+    return seed;
+  }
+
+  function saveLocalMockInventoryList(list) {
+    try {
+      safeSetItem(MOCK_INVENTORY_STORAGE_KEY, JSON.stringify(list));
+    } catch (e) {
+      console.error("Mock DB persistence error", e);
+    }
+  }
+
+  function saveLocalMockFeedbackList() {
+    try {
+      safeSetItem(MOCK_STORAGE_KEY, JSON.stringify(activeFeedbackList));
+    } catch (e) {
+      console.error("Mock DB persistence error", e);
+    }
+  }
+
+  // === PROFILE UPDATE & MEDICAL UPLOAD CONTROLLER ===
+  function openUpdateInfoModal() {
+    document.getElementById("update-info-modal").classList.add("active");
+    document.getElementById("update-info-form").reset();
+  }
+
+  function closeUpdateInfoModal() {
+    document.getElementById("update-info-modal").classList.remove("active");
+  }
+
+  function submitUpdateInfo(event) {
+    event.preventDefault();
+    
+    const addressVal = document.getElementById("update-address").value.trim();
+    const phoneVal = document.getElementById("update-phone").value.trim();
+    const emergencyVal = document.getElementById("update-emergency").value.trim();
+    const fileEl = document.getElementById("update-medical-doc");
+    
+    if (!addressVal && !phoneVal && !emergencyVal && fileEl.files.length === 0) {
+      showCustomDialog("Validation Error", currentLanguage === 'es'
+        ? "¡Por favor completa al menos un campo para actualizar, chacho!"
+        : "Please fill in at least one field to update!");
+      return;
+    }
+    
+    const btn = document.getElementById("btn-submit-update-info");
+    const origBtnText = btn.innerText;
+    btn.disabled = true;
+    btn.innerText = currentLanguage === 'es' ? "Actualizando..." : "Updating...";
+    
+    const sendData = (filePayload) => {
+      const email = sessionUser.email;
+      const pin = getPINAuth();
+      const isHybrid = document.getElementById("architecture-toggle").classList.contains("active");
+      
+      if (isHybrid) {
+        const workerUrl = getNetworkSetting("worker_url");
+        const appsScriptUrl = getNetworkSetting("gas_url");
+        const geminiKey = getNetworkSetting("gemini_key");
+        
+        fetch(workerUrl, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-Apps-Script-Url": appsScriptUrl,
+            "X-Gemini-Key": geminiKey
+          },
+          body: JSON.stringify({
+            email: email,
+            pin: pin,
+            action: "updateProfileAndMedicalDoc",
+            address: addressVal,
+            phone: phoneVal,
+            emergencyContact: emergencyVal,
+            fileData: filePayload,
+            query: "Update profile & upload medical document"
+          })
+        })
+        .then(res => res.json())
+        .then(data => {
+          btn.disabled = false;
+          btn.innerText = origBtnText;
+          if (data.success) {
+            closeUpdateInfoModal();
+            showCustomDialog("Success", currentLanguage === 'es' 
+              ? "¡Tus datos se actualizaron con éxito, chacho!" 
+              : "Your details were successfully updated!");
+          } else {
+            showCustomDialog("Update Error", data.error || "An error occurred.");
+          }
+        })
+        .catch(err => {
+          btn.disabled = false;
+          btn.innerText = origBtnText;
+          showCustomDialog("Connection Failed", "Could not connect to Edge router: " + err.toString());
+        });
+      } else {
+        if (typeof google !== 'undefined' && google.script && google.script.run) {
+          google.script.run
+            .withSuccessHandler(function (data) {
+              btn.disabled = false;
+              btn.innerText = origBtnText;
+              if (data.success) {
+                closeUpdateInfoModal();
+                showCustomDialog("Success", currentLanguage === 'es' 
+                  ? "¡Tus datos se actualizaron con éxito, chacho!" 
+                  : "Your details were successfully updated!");
+              } else {
+                showCustomDialog("Update Error", data.error || "An error occurred.");
+              }
+            })
+            .withFailureHandler(function (err) {
+              btn.disabled = false;
+              btn.innerText = origBtnText;
+              showCustomDialog("Execution Error", err.toString());
+            })
+            .directUpdateProfileAndMedicalDoc(email, pin, addressVal, phoneVal, emergencyVal, filePayload);
+        } else {
+          // Offline preview mock simulation
+          setTimeout(() => {
+            btn.disabled = false;
+            btn.innerText = origBtnText;
+            closeUpdateInfoModal();
+            showCustomDialog("Offline Success (Mock)", currentLanguage === 'es'
+              ? "¡Actualización de perfil simulada con éxito sin conexión!"
+              : "Profile update simulated successfully offline (Mock)!");
+          }, 1000);
+        }
+      }
+    };
+    
+    if (fileEl.files.length > 0) {
+      const file = fileEl.files[0];
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        const base64Data = e.target.result;
+        const filePayload = {
+          base64: base64Data,
+          name: file.name,
+          mimeType: file.type
+        };
+        sendData(filePayload);
+      };
+      reader.readAsDataURL(file);
+    } else {
+      sendData(null);
+    }
+  }
+
+  // === RECORD CASH PAYMENT CONTROLLER ===
+  function openRecordPaymentModal() {
+    document.getElementById("record-payment-modal").classList.add("active");
+    document.getElementById("record-payment-form").reset();
+  }
+
+  function closeRecordPaymentModal() {
+    document.getElementById("record-payment-modal").classList.remove("active");
+  }
+
+  function submitCashPayment(event) {
+    event.preventDefault();
+    
+    const payDateVal = document.getElementById("payment-date").value;
+    const payAmountVal = document.getElementById("payment-amount").value.trim();
+    
+    if (!payDateVal || !payAmountVal) {
+      showCustomDialog("Validation Error", "Please enter both Date and Amount, carajo!");
+      return;
+    }
+    
+    const amountFloat = parseFloat(payAmountVal);
+    if (isNaN(amountFloat) || amountFloat <= 0) {
+      showCustomDialog("Validation Error", "Please enter a valid positive payment amount, carajo!");
+      return;
+    }
+    
+    const btn = document.getElementById("btn-submit-payment");
+    const origBtnText = btn.innerText;
+    btn.disabled = true;
+    btn.innerText = currentLanguage === 'es' ? "Registrando..." : "Recording...";
+    
+    const email = sessionUser.email;
+    const pin = getPINAuth();
+    const isHybrid = document.getElementById("architecture-toggle").classList.contains("active");
+    
+    if (isHybrid) {
+      const workerUrl = getNetworkSetting("worker_url");
+      const appsScriptUrl = getNetworkSetting("gas_url");
+      const geminiKey = getNetworkSetting("gemini_key");
+      
+      fetch(workerUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Apps-Script-Url": appsScriptUrl,
+          "X-Gemini-Key": geminiKey
+        },
+        body: JSON.stringify({
+          email: email,
+          pin: pin,
+          action: "recordCashPayment",
+          payDate: payDateVal,
+          payAmount: payAmountVal,
+          query: "Record cash payment"
+        })
+      })
+      .then(res => res.json())
+      .then(data => {
+        btn.disabled = false;
+        btn.innerText = origBtnText;
+        if (data.success) {
+          closeRecordPaymentModal();
+          showCustomDialog("Success", currentLanguage === 'es'
+            ? "¡Tu pago en efectivo ha sido registrado con éxito en la base de datos, chacho!"
+            : "Your cash payment has been recorded successfully in the database!");
+        } else {
+          showCustomDialog("Payment Error", data.error || "An error occurred.");
+        }
+      })
+      .catch(err => {
+        btn.disabled = false;
+        btn.innerText = origBtnText;
+        showCustomDialog("Connection Failed", "Could not connect to Edge router: " + err.toString());
+      });
+    } else {
+      if (typeof google !== 'undefined' && google.script && google.script.run) {
+        google.script.run
+          .withSuccessHandler(function (data) {
+            btn.disabled = false;
+            btn.innerText = origBtnText;
+            if (data.success) {
+              closeRecordPaymentModal();
+              showCustomDialog("Success", currentLanguage === 'es'
+                ? "¡Tu pago en efectivo ha sido registrado con éxito en la base de datos, chacho!"
+                : "Your cash payment has been recorded successfully in the database!");
+            } else {
+              showCustomDialog("Payment Error", data.error || "An error occurred.");
+            }
+          })
+          .withFailureHandler(function (err) {
+            btn.disabled = false;
+            btn.innerText = origBtnText;
+            showCustomDialog("Execution Error", err.toString());
+          })
+          .directRecordCashPayment(email, pin, payDateVal, payAmountVal);
+      } else {
+        // Offline preview mock simulation
+        setTimeout(() => {
+          btn.disabled = false;
+          btn.innerText = origBtnText;
+          closeRecordPaymentModal();
+          showCustomDialog("Offline Success (Mock)", currentLanguage === 'es'
+            ? "¡Registro de pago en efectivo simulado con éxito sin conexión!"
+            : "Cash payment registration simulated successfully offline (Mock)!");
+        }, 1000);
+      }
+    }
+  }
+</script>
