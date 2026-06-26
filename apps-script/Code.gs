@@ -2137,6 +2137,8 @@ function syncFormResponsesToProfiles(e) {
         updateMade = true;
       }
       
+      if (updateMade) {
+        Logger.log(`Successfully synced form response data to performer profile dynamically in DB: ${emailVal}`);
       } else {
         Logger.log(`Sync Notice: Performer matched but no matching target columns or values to update.`);
       }
