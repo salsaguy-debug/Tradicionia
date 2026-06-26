@@ -227,6 +227,11 @@
             <span class="material-icons-round">rate_review</span>
             <span id="sidebar-feedback-label">Submit Feedback</span>
           </button>
+          <button class="btn-sidebar-action text-accent" onclick="openCostumeChecklistModal()"
+            title="Verify my checked out costume and prop checklist" id="btn-costume-checklist" style="margin-bottom: 5px;">
+            <span class="material-icons-round">checkroom</span>
+            <span id="sidebar-costume-checklist-label">Costume Checklist</span>
+          </button>
           <button class="btn-sidebar-action text-accent" onclick="openUpdateInfoModal()"
             title="Update my profile and health information" id="btn-update-info" style="margin-bottom: 5px;">
             <span class="material-icons-round">contact_mail</span>
@@ -2852,6 +2857,90 @@
       </div>
     </div>
   </div>
+
+  <!-- Costume & Prop Performer Checklist Modal -->
+  <div id="costume-checklist-modal" class="modal-overlay">
+    <div class="manual-card glassmorphic" style="max-width: 950px; padding: 2rem; width: 90%;">
+      <div class="manual-header" style="margin-bottom: 1.5rem;">
+        <div class="header-left">
+          <span class="material-icons-round text-accent">checkroom</span>
+          <h2 style="font-family: var(--font-family-title); font-size: 1.4rem;" id="costume-checklist-title">Costume & Prop Checklist</h2>
+        </div>
+        <button class="btn-close-manual" onclick="closeCostumeChecklistModal()">
+          <span class="material-icons-round">close</span>
+        </button>
+      </div>
+
+      <!-- Performer Switcher (Admins/Directors only) -->
+      <div id="checklist-performer-switcher-wrapper" class="view-select-container admin-only-section" style="display: none; margin-bottom: 1.5rem; text-align: left;">
+        <span style="font-size: 0.8rem; font-weight: 700; text-transform: uppercase; color: var(--text-muted); letter-spacing: 0.5px; margin-right: 0.5rem;" id="lbl-performer-select">Review Dancer:</span>
+        <select id="checklistPerformerSelect" class="view-select" style="min-width: 240px;" onchange="onChecklistPerformerChanged()">
+          <!-- Populated dynamically via JS -->
+        </select>
+      </div>
+
+      <!-- Stats Summary Section -->
+      <div class="feedback-admin-stats">
+        <div class="feedback-stat-card">
+          <span class="material-icons-round stat-icon">assignment</span>
+          <div>
+            <span class="stat-val" id="checklist-stat-total">0</span>
+            <span class="stat-label" id="lbl-checklist-stat-total">Total Assigned</span>
+          </div>
+        </div>
+        <div class="feedback-stat-card stat-completed">
+          <span class="material-icons-round stat-icon">check_circle</span>
+          <div>
+            <span class="stat-val" id="checklist-stat-confirmed">0</span>
+            <span class="stat-label" id="lbl-checklist-stat-confirmed">Checked</span>
+          </div>
+        </div>
+        <div class="feedback-stat-card stat-pending">
+          <span class="material-icons-round stat-icon">help_outline</span>
+          <div>
+            <span class="stat-val" id="checklist-stat-pending">0</span>
+            <span class="stat-label" id="lbl-checklist-stat-pending">Pending</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Filter/Sort Toolbar -->
+      <div class="dashboard-toolbar" style="display: flex; gap: 1rem; align-items: center; justify-content: space-between; margin-bottom: 1.5rem; flex-wrap: wrap; background: rgba(255,255,255,0.02); padding: 0.75rem 1.25rem; border: 1px solid var(--border-glass); border-radius: 8px; margin-top: 1.5rem;">
+        <div class="toolbar-left" style="display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;">
+          <span style="font-size: 0.8rem; font-weight: 700; text-transform: uppercase; color: var(--text-muted); letter-spacing: 0.5px;" id="lbl-type-filter">Filter:</span>
+          <div class="view-select-container">
+            <select id="checklistTypeFilter" class="view-select" style="min-width: 150px; padding: 0.4rem 2.25rem 0.4rem 1rem; font-size: 0.85rem;" onchange="renderCostumeCards()">
+              <option value="all">🔍 All Types</option>
+            </select>
+          </div>
+        </div>
+        <div class="toolbar-right" style="display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;">
+          <span style="font-size: 0.8rem; font-weight: 700; text-transform: uppercase; color: var(--text-muted); letter-spacing: 0.5px;" id="lbl-layout-filter">Layout:</span>
+          <div class="view-select-container">
+            <select id="checklistLayoutSelect" class="view-select" style="min-width: 150px; padding: 0.4rem 2.25rem 0.4rem 1rem; font-size: 0.85rem;" onchange="changeChecklistLayout()">
+              <option value="layout-large">🖼️ Large Cards</option>
+              <option value="layout-medium" selected>📱 Medium Cards</option>
+              <option value="layout-list">📝 List View</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <!-- Checklist Cards Grid Container -->
+      <div id="costume-checklist-grid" class="item-grid layout-medium">
+        <div style="text-align: center; color: var(--text-muted); padding: 40px; width: 100%;" id="checklist-loading-msg">Loading checklist items...</div>
+      </div>
+
+      <div style="display: flex; justify-content: flex-end; margin-top: 1.5rem;">
+        <button class="btn-primary-glow" onclick="closeCostumeChecklistModal()" style="padding: 0.5rem 1.5rem; border-radius: 6px; width: auto;" id="btn-close-checklist">Close Checklist</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Zoom Lightbox Modal -->
+  <div id="zoom-lightbox-modal" class="lightbox-overlay" onclick="closeZoomLightbox(event)">
+    <button class="lightbox-close-btn" onclick="closeZoomLightbox(event)">&times;</button>
+    <img class="lightbox-image" id="zoom-lightbox-image" src="" alt="Zoomed Inventory Preview">
 
   <!-- Server-Side JavaScript Embed -->
   <?!= include('JavaScript'); ?>

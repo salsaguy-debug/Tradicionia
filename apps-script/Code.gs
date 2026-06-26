@@ -121,6 +121,20 @@ function doPost(e) {
       )).setMimeType(ContentService.MimeType.JSON);
     }
     
+    // Direct Costume Checklist Retrieval check
+    if (payload.getInventoryChecklist) {
+      return ContentService.createTextOutput(JSON.stringify(
+        directGetInventoryChecklist(email, pin, payload.selectedEmail)
+      )).setMimeType(ContentService.MimeType.JSON);
+    }
+    
+    // Direct Costume Checklist Update check
+    if (payload.saveInventoryField) {
+      return ContentService.createTextOutput(JSON.stringify(
+        directSaveInventoryField(email, pin, payload.rowIndex, payload.expectedId, payload.newStatus, payload.performerNotes)
+      )).setMimeType(ContentService.MimeType.JSON);
+    }
+    
     const query = payload.query;
     const language = payload.language || "en";
     const history = payload.history || [];
@@ -2123,8 +2137,6 @@ function syncFormResponsesToProfiles(e) {
         updateMade = true;
       }
       
-      if (updateMade) {
-        Logger.log(`Successfully synced form response data to performer profile dynamically in DB: ${emailVal}`);
       } else {
         Logger.log(`Sync Notice: Performer matched but no matching target columns or values to update.`);
       }
@@ -2133,6 +2145,323 @@ function syncFormResponsesToProfiles(e) {
     }
   } catch (err) {
     Logger.log("Sync Trigger Dynamic Error: " + err.toString());
+  }
+}
+
+/**
+ * ==========================================
+ * PORTED COSTUME & PROP CHECKLIST BACKEND
+ * ==========================================
+ */
+
+const INVENTORY_SPREADSHEET_ID = "1IPZznR7kK-oCoThEHmACgMOW6KJfP8NSwzGKv3q-ITY";
+
+function directGetInventoryChecklist(email, pin, selectedEmail) {
+  const auth = validateCredentials(email, pin);
+  if (auth.clearance === "director") {
+    return {
+      success: true,
+      items: getPerformerInventoryForAdmin(email, selectedEmail || "all"),
+      performersList: getPerformersList(),
+      isAdminUser: true
+    };
+  } else {
+    return {
+      success: true,
+      items: getPerformerInventory(email),
+      isAdminUser: false
+    };
+  }
+}
+
+function directSaveInventoryField(email, pin, rowIndex, expectedId, newStatus, performerNotes) {
+  const auth = validateCredentials(email, pin);
+  // Performers and directors can both save updates to their checklist
+  const result = updateItemStatusAndNotes(rowIndex, expectedId, newStatus, performerNotes);
+  return result;
+}
+
+function getInventorySpreadsheet() {
+  try {
+    return SpreadsheetApp.openById(INVENTORY_SPREADSHEET_ID);
+  } catch (err) {
+    const activeSS = SpreadsheetApp.getActiveSpreadsheet();
+    if (activeSS) {
+      return activeSS;
+    }
+    throw new Error("Unable to connect to the spreadsheet. Please verify the spreadsheet ID: " + INVENTORY_SPREADSHEET_ID);
+  }
+}
+
+function getOrCreatePerformerNotesColumn(sheet, lowerHeaders) {
+  let index = lowerHeaders.indexOf("performer notes");
+  if (index !== -1) {
+    return index;
+  }
+  const nextColNum = sheet.getLastColumn() + 1;
+  sheet.getRange(1, nextColNum).setValue("Performer notes");
+  try {
+    const adjacentHeader = sheet.getRange(1, nextColNum - 1);
+    const newHeader = sheet.getRange(1, nextColNum);
+    newHeader.setFontWeight(adjacentHeader.getFontWeight());
+    newHeader.setFontColor(adjacentHeader.getFontColor());
+    newHeader.setBackground(adjacentHeader.getBackground());
+    newHeader.setHorizontalAlignment(adjacentHeader.getHorizontalAlignment());
+  } catch (err) {
+    Logger.log("Failed to mirror header styles: " + err.toString());
+  }
+  return nextColNum - 1;
+}
+
+function getPerformerInventoryForAdmin(adminEmail, performerEmail) {
+  if (!isAdmin(adminEmail)) {
+    throw new Error("Unauthorized access. Admin privileges required.");
+  }
+  if (!performerEmail || performerEmail === "all") {
+    return getAllInventory();
+  }
+  if (performerEmail === "unassigned") {
+    var all = getAllInventory();
+    return all.filter(function(item) {
+      return !item.assigned || item.assigned.indexOf('@') === -1;
+    });
+  }
+  return getPerformerInventory(performerEmail);
+}
+
+function getPerformerInventory(email) {
+  if (!email) return [];
+  const ss = getInventorySpreadsheet();
+  const sheet = ss.getSheetByName("Inventory") || ss.getSheets()[0];
+  if (!sheet) {
+    throw new Error("System Error: Inventory database sheet not found.");
+  }
+  const values = sheet.getDataRange().getValues();
+  if (values.length <= 1) {
+    return [];
+  }
+  const headers = values[0];
+  const lowerHeaders = headers.map(h => h.toString().toLowerCase().trim());
+  const idCol = lowerHeaders.indexOf("id");
+  const descCol = lowerHeaders.indexOf("item description");
+  const assignedCol = lowerHeaders.indexOf("assigned");
+  const picsCol = lowerHeaders.indexOf("pics");
+  const picCol = lowerHeaders.indexOf("pic");
+  const costCol = lowerHeaders.indexOf("replacement cost");
+  const statusCol = lowerHeaders.indexOf("status");
+  let typeCol = lowerHeaders.indexOf("type");
+  if (typeCol === -1) {
+    typeCol = lowerHeaders.indexOf("types");
+  }
+  if (assignedCol === -1) {
+    throw new Error("System Error: 'Assigned' performer column was not found in the spreadsheet headers.");
+  }
+  const performerNotesCol = getOrCreatePerformerNotesColumn(sheet, lowerHeaders);
+  const items = [];
+  for (let i = 1; i < values.length; i++) {
+    const row = values[i];
+    if (row.length <= assignedCol) continue;
+    const rowEmail = row[assignedCol].toString().trim().toLowerCase();
+    if (rowEmail === email) {
+      const itemId = idCol !== -1 ? row[idCol].toString().trim() : "N/A";
+      const itemDesc = descCol !== -1 ? row[descCol].toString().trim() : "Unlabeled Costume/Prop";
+      let rawPic = "";
+      if (picsCol !== -1 && row[picsCol]) {
+        rawPic = row[picsCol].toString().trim();
+      } else if (picCol !== -1 && row[picCol]) {
+        rawPic = row[picCol].toString().trim();
+      }
+      const replacementCost = costCol !== -1 ? row[costCol].toString().trim() : "N/A";
+      const currentStatus = statusCol !== -1 ? row[statusCol].toString().trim() : "-";
+      const notes = performerNotesCol !== -1 && row.length > performerNotesCol ? row[performerNotesCol].toString().trim() : "";
+      const itemType = typeCol !== -1 ? row[typeCol].toString().trim() : "General";
+      items.push({
+        rowIndex: i + 1,
+        id: itemId,
+        description: itemDesc,
+        picUrl: rawPic,
+        cost: replacementCost,
+        status: currentStatus || "-",
+        notes: notes,
+        assigned: rowEmail,
+        type: itemType
+      });
+    }
+  }
+  return items;
+}
+
+function getAllInventory() {
+  const ss = getInventorySpreadsheet();
+  const sheet = ss.getSheetByName("Inventory") || ss.getSheets()[0];
+  if (!sheet) {
+    throw new Error("System Error: Inventory database sheet not found.");
+  }
+  const values = sheet.getDataRange().getValues();
+  if (values.length <= 1) {
+    return [];
+  }
+  const headers = values[0];
+  const lowerHeaders = headers.map(h => h.toString().toLowerCase().trim());
+  const idCol = lowerHeaders.indexOf("id");
+  const descCol = lowerHeaders.indexOf("item description");
+  const assignedCol = lowerHeaders.indexOf("assigned");
+  const picsCol = lowerHeaders.indexOf("pics");
+  const picCol = lowerHeaders.indexOf("pic");
+  const costCol = lowerHeaders.indexOf("replacement cost");
+  const statusCol = lowerHeaders.indexOf("status");
+  let typeCol = lowerHeaders.indexOf("type");
+  if (typeCol === -1) {
+    typeCol = lowerHeaders.indexOf("types");
+  }
+  const performerNotesCol = getOrCreatePerformerNotesColumn(sheet, lowerHeaders);
+  const items = [];
+  for (let i = 1; i < values.length; i++) {
+    const row = values[i];
+    if (row.length <= assignedCol) continue;
+    const rowEmail = row[assignedCol].toString().trim().toLowerCase();
+    const itemId = idCol !== -1 && row.length > idCol ? row[idCol].toString().trim() : "N/A";
+    const itemDesc = descCol !== -1 && row.length > descCol ? row[descCol].toString().trim() : "Unlabeled Costume/Prop";
+    let rawPic = "";
+    if (picsCol !== -1 && row.length > picsCol && row[picsCol]) {
+      rawPic = row[picsCol].toString().trim();
+    } else if (picCol !== -1 && row.length > picCol && row[picCol]) {
+      rawPic = row[picCol].toString().trim();
+    }
+    const replacementCost = costCol !== -1 && row.length > costCol ? row[costCol].toString().trim() : "N/A";
+    const currentStatus = statusCol !== -1 && row.length > statusCol ? row[statusCol].toString().trim() : "-";
+    const notes = performerNotesCol !== -1 && row.length > performerNotesCol ? row[performerNotesCol].toString().trim() : "";
+    const itemType = typeCol !== -1 && row.length > typeCol ? row[typeCol].toString().trim() : "General";
+    items.push({
+      rowIndex: i + 1,
+      id: itemId,
+      description: itemDesc,
+      picUrl: rawPic,
+      cost: replacementCost,
+      status: currentStatus || "-",
+      notes: notes,
+      assigned: rowEmail,
+      type: itemType
+    });
+  }
+  return items;
+}
+
+function getPerformersList() {
+  try {
+    const ss = getInventorySpreadsheet();
+    const sheet = ss.getSheetByName("Inventory") || ss.getSheets()[0];
+    if (!sheet) return [];
+    const values = sheet.getDataRange().getValues();
+    if (values.length <= 1) return [];
+    const headers = values[0].map(h => h.toString().toLowerCase().trim());
+    const assignedCol = headers.indexOf("assigned");
+    if (assignedCol === -1) return [];
+    const emailToName = {};
+    try {
+      const profilesSS = getSpreadsheetInstance(); // In AI OS, Profiles is in the main spreadsheet
+      const profilesSheet = profilesSS.getSheetByName("Profiles") || profilesSS.getSheetByName("Profile") || profilesSS.getSheetByName("Sheet1") || profilesSS.getSheetByName("Crosswalk");
+      if (profilesSheet) {
+        const profileValues = profilesSheet.getDataRange().getValues();
+        if (profileValues.length > 1) {
+          const profileHeaders = profileValues[0].map(h => h.toString().toLowerCase().trim());
+          const emailCol = profileHeaders.findIndex(h => h.includes("email") || h.includes("correo"));
+          const nameCol = profileHeaders.findIndex(h => (h.includes("name") || h.includes("nombre") || h.includes("fullname") || h.includes("full name")) && 
+                                                !h.includes("contact") && !h.includes("emergency"));
+          if (emailCol !== -1 && nameCol !== -1) {
+            for (let i = 1; i < profileValues.length; i++) {
+              const email = profileValues[i][emailCol].toString().trim().toLowerCase();
+              const name = profileValues[i][nameCol].toString().trim();
+              if (email) {
+                emailToName[email] = name;
+              }
+            }
+          }
+        }
+      }
+    } catch (e) {
+      Logger.log("Failed to load names from Profiles in getPerformersList: " + e.toString());
+    }
+    const uniqueEmails = {};
+    for (let i = 1; i < values.length; i++) {
+      if (values[i].length > assignedCol) {
+        const email = values[i][assignedCol].toString().trim().toLowerCase();
+        if (email && email.indexOf("@") !== -1) {
+          uniqueEmails[email] = true;
+        }
+      }
+    }
+    const list = Object.keys(uniqueEmails).map(email => {
+      return {
+        email: email,
+        name: emailToName[email] || formatEmailToName(email)
+      };
+    });
+    list.sort((a, b) => a.name.localeCompare(b.name));
+    return list;
+  } catch (err) {
+    Logger.log("Error in getPerformersList: " + err.toString());
+    return [];
+  }
+}
+
+function formatEmailToName(email) {
+  const parts = email.split('@')[0].split('.');
+  return parts.map(p => p.charAt(0).toUpperCase() + p.slice(1)).join(' ');
+}
+
+function updateItemStatusAndNotes(rowIndex, expectedId, newStatus, performerNotes) {
+  try {
+    const ss = getInventorySpreadsheet();
+    const sheet = ss.getSheetByName("Inventory") || ss.getSheets()[0];
+    if (!sheet) {
+      throw new Error("Inventory database sheet not found.");
+    }
+    const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+    const lowerHeaders = headers.map(h => h.toString().toLowerCase().trim());
+    const idCol = lowerHeaders.indexOf("id");
+    const statusCol = lowerHeaders.indexOf("status");
+    const notesCol = getOrCreatePerformerNotesColumn(sheet, lowerHeaders);
+    if (statusCol === -1) {
+      throw new Error("Unable to locate 'Status' column in spreadsheet headers.");
+    }
+    const rowNum = parseInt(rowIndex, 10);
+    if (isNaN(rowNum) || rowNum <= 1 || rowNum > sheet.getLastRow()) {
+      throw new Error("Invalid spreadsheet row number: " + rowIndex);
+    }
+    let actualId = "";
+    if (idCol !== -1) {
+      actualId = sheet.getRange(rowNum, idCol + 1).getValue().toString().trim();
+    }
+    let targetRow = rowNum;
+    if (actualId !== expectedId) {
+      Logger.log(`Collision Guard: ID at row ${rowNum} is '${actualId}' but expected '${expectedId}'. Scanning spreadsheet to find correct row...`);
+      const values = sheet.getDataRange().getValues();
+      let foundRow = -1;
+      for (let i = 1; i < values.length; i++) {
+        if (idCol !== -1 && values[i][idCol].toString().trim() === expectedId) {
+          foundRow = i + 1;
+          break;
+        }
+      }
+      if (foundRow === -1) {
+        throw new Error("Data Integrity Error: Item ID '" + expectedId + "' could not be located in the sheet.");
+      }
+      targetRow = foundRow;
+      Logger.log(`Collision Guard: Correct row resolved at index ${targetRow}.`);
+    }
+    sheet.getRange(targetRow, statusCol + 1).setValue(newStatus);
+    sheet.getRange(targetRow, notesCol + 1).setValue(performerNotes);
+    return {
+      success: true,
+      resolvedRowIndex: targetRow
+    };
+  } catch (error) {
+    Logger.log("Error in updateItemStatusAndNotes: " + error.toString());
+    return {
+      success: false,
+      error: error.message || error.toString()
+    };
   }
 }
 

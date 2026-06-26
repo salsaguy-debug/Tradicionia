@@ -321,6 +321,57 @@ async function handleRequest(request) {
       });
     }
 
+    // Direct Costume Checklist Retrieval forwarder
+    if (action === "getInventoryChecklist") {
+      const gasResponse = await fetch(appsScriptUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email,
+          pin,
+          getInventoryChecklist: true,
+          selectedEmail: payload.selectedEmail
+        })
+      });
+
+      if (!gasResponse.ok) {
+        throw new Error(`Apps Script Gateway is unreachable or returned status code ${gasResponse.status}.`);
+      }
+
+      const gasData = await gasResponse.json();
+      return new Response(JSON.stringify(gasData), {
+        status: 200,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
+    }
+
+    // Direct Costume Checklist Update forwarder
+    if (action === "saveInventoryField") {
+      const gasResponse = await fetch(appsScriptUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email,
+          pin,
+          saveInventoryField: true,
+          rowIndex: payload.rowIndex,
+          expectedId: payload.expectedId,
+          newStatus: payload.newStatus,
+          performerNotes: payload.performerNotes
+        })
+      });
+
+      if (!gasResponse.ok) {
+        throw new Error(`Apps Script Gateway is unreachable or returned status code ${gasResponse.status}.`);
+      }
+
+      const gasData = await gasResponse.json();
+      return new Response(JSON.stringify(gasData), {
+        status: 200,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
+    }
+
     // 2. Fetch ground-truth context from Apps Script Gateway
     const gasResponse = await fetch(appsScriptUrl, {
       method: 'POST',

@@ -21,7 +21,7 @@
   <!-- Server-Side CSS Embed -->
   <style>
   /* 
- * Tradición AI Engine — "La Armadura Final" (v10.3 - Date: 2026-05-31)
+ * Tradición AI Engine — "La Armadura Final" (v10.1 - Date: 2026-05-30)
  * CSS Stylesheet & Glassmorphic Design System
  */
 
@@ -2742,6 +2742,415 @@
   .hidden {
     display: none !important;
   }
+
+  /* ==========================================
+     PORTED COSTUME & PROP CHECKLIST STYLES
+     ========================================== */
+  /* Item Grid Layout */
+  .item-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    gap: 1.5rem;
+    margin-top: 15px;
+    transition: var(--transition-smooth);
+    width: 100%;
+    max-height: 60vh;
+    overflow-y: auto;
+    padding-right: 5px;
+  }
+
+  /* Layout Variations */
+  .item-grid.layout-medium {
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    gap: 1rem;
+  }
+  .item-grid.layout-medium .item-image-box {
+    height: 140px;
+  }
+  .item-grid.layout-medium .item-title {
+    font-size: 1rem;
+  }
+  .item-grid.layout-medium .item-content {
+    padding: 1rem;
+    gap: 0.8rem;
+  }
+  .item-grid.layout-medium .notes-textarea {
+    height: 55px;
+  }
+
+  .item-grid.layout-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+  .item-grid.layout-list .item-card {
+    flex-direction: row;
+    align-items: stretch;
+    width: 100%;
+    min-height: 110px;
+  }
+  .item-grid.layout-list .item-image-box {
+    width: 120px;
+    height: 100%;
+    min-height: 120px;
+    flex-shrink: 0;
+    border-bottom: none;
+    border-right: 1px solid var(--border-glass);
+  }
+  .item-grid.layout-list .item-content {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    flex-grow: 1;
+    padding: 0.75rem 1.25rem;
+    gap: 1rem;
+    flex-wrap: wrap;
+  }
+  .item-grid.layout-list .item-info {
+    flex: 1 1 200px;
+  }
+  .item-grid.layout-list .status-group {
+    flex: 1 1 150px;
+    min-width: 140px;
+  }
+  .item-grid.layout-list .notes-group {
+    flex: 2 1 240px;
+    min-width: 180px;
+  }
+  .item-grid.layout-list .notes-textarea {
+    height: 44px;
+  }
+  .item-grid.layout-list .item-image-box .id-tag,
+  .item-grid.layout-list .item-image-box .cost-tag {
+    display: none;
+  }
+
+  /* Card Item Style */
+  .item-card {
+    background: var(--bg-glass-card);
+    border: 1px solid var(--border-glass-glow);
+    border-radius: var(--radius-md);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    box-shadow: var(--shadow-glow);
+    transition: var(--transition-smooth);
+    position: relative;
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+  }
+  .item-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 25px rgba(245, 197, 66, 0.15);
+    border-color: hsla(var(--primary-base), 0.3);
+  }
+
+  /* Image Box */
+  .item-image-box {
+    width: 100%;
+    height: 180px;
+    background-color: rgba(0, 0, 0, 0.4);
+    position: relative;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: zoom-in;
+    border-bottom: 1px solid var(--border-glass);
+  }
+  .item-img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    transition: var(--transition-smooth);
+  }
+  .item-image-box:hover .item-img {
+    transform: scale(1.03);
+  }
+  .item-img-placeholder {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    color: var(--text-muted);
+    gap: 0.5rem;
+    padding: 1.5rem;
+    text-align: center;
+  }
+  .item-img-placeholder span {
+    font-size: 36px;
+  }
+
+  /* Tag overlays */
+  .cost-tag {
+    position: absolute;
+    top: 0.75rem;
+    right: 0.75rem;
+    background-color: rgba(15, 23, 42, 0.85);
+    backdrop-filter: blur(4px);
+    border: 1px solid var(--border-glass);
+    color: hsl(var(--primary-base));
+    padding: 0.25rem 0.5rem;
+    font-size: 0.75rem;
+    font-weight: 700;
+    border-radius: var(--radius-sm);
+    font-family: var(--font-family-title);
+  }
+  .id-tag {
+    position: absolute;
+    top: 0.75rem;
+    left: 0.75rem;
+    background-color: rgba(15, 23, 42, 0.85);
+    backdrop-filter: blur(4px);
+    border: 1px solid var(--border-glass);
+    color: #ffffff;
+    padding: 0.25rem 0.5rem;
+    font-size: 0.72rem;
+    font-weight: 600;
+    border-radius: var(--radius-sm);
+  }
+
+  /* Content Box */
+  .item-content {
+    padding: 1rem;
+    display: flex;
+    flex-direction: column;
+    flex-grow: 1;
+    gap: 0.8rem;
+  }
+  .item-info {
+    flex-grow: 1;
+  }
+  .item-title {
+    font-size: 1.05rem;
+    line-height: 1.3;
+    margin-bottom: 0.35rem;
+    color: var(--text-main);
+    font-family: var(--font-family-title);
+  }
+  .item-meta-badges {
+    display: flex;
+    gap: 0.4rem;
+    margin-top: 0.35rem;
+    flex-wrap: wrap;
+  }
+  .meta-badge {
+    background-color: rgba(255, 255, 255, 0.05);
+    border: 1px solid var(--border-glass);
+    color: var(--text-muted);
+    font-size: 0.7rem;
+    font-weight: 600;
+    padding: 0.1rem 0.4rem;
+    border-radius: var(--radius-sm);
+  }
+  .meta-badge.badge-gold {
+    color: hsl(var(--primary-base));
+    border-color: rgba(245, 197, 66, 0.2);
+  }
+  .meta-badge.badge-type {
+    color: #38bdf8;
+    border-color: rgba(56, 189, 248, 0.2);
+  }
+
+  /* Dropdown Status Selection */
+  .status-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+  }
+  .status-label {
+    font-size: 0.72rem;
+    font-weight: 700;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  .status-select-wrapper {
+    position: relative;
+    width: 100%;
+  }
+  .status-select {
+    width: 100%;
+    background-color: var(--bg-input);
+    color: var(--text-main);
+    border: 1px solid var(--border-glass);
+    border-radius: var(--radius-sm);
+    padding: 0.5rem 1.75rem 0.5rem 0.75rem;
+    font-size: 0.85rem;
+    font-weight: 500;
+    outline: none;
+    cursor: pointer;
+    appearance: none;
+    -webkit-appearance: none;
+    transition: var(--transition-smooth);
+  }
+  .status-select:focus {
+    border-color: hsl(var(--primary-base));
+    box-shadow: 0 0 10px rgba(245, 197, 66, 0.15);
+  }
+  .status-select-wrapper::after {
+    content: "expand_more";
+    font-family: "Material Icons Round";
+    position: absolute;
+    right: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--text-muted);
+    font-size: 16px;
+    pointer-events: none;
+    transition: var(--transition-smooth);
+  }
+  .status-select:focus + .status-select-wrapper::after {
+    color: hsl(var(--primary-base));
+  }
+
+  /* Status Colors */
+  .status-select.val-yes { border-left: 3px solid var(--success-green); }
+  .status-select.val-returned { border-left: 3px solid var(--info-blue); }
+  .status-select.val-never { border-left: 3px solid var(--warning-orange); }
+  .status-select.val-lost { border-left: 3px solid var(--accent-crimson); }
+  .status-select.val-loaned { border-left: 3px solid #8b5cf6; }
+  .status-select.val-damaged { border-left: 3px solid #f43f5e; }
+  .status-select.val-different { border-left: 3px solid #a855f7; }
+  .status-select.val-unset { border-left: 3px solid var(--border-glass); }
+
+  /* Notes Group */
+  .notes-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+  }
+  .notes-label {
+    font-size: 0.72rem;
+    font-weight: 700;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .notes-textarea {
+    width: 100%;
+    height: 55px;
+    background-color: var(--bg-input);
+    color: var(--text-main);
+    border: 1px solid var(--border-glass);
+    border-radius: var(--radius-sm);
+    padding: 0.4rem 0.6rem;
+    font-size: 0.8rem;
+    font-family: inherit;
+    outline: none;
+    resize: none;
+    transition: var(--transition-smooth);
+  }
+  .notes-textarea:focus {
+    border-color: hsl(var(--primary-base));
+    box-shadow: 0 0 10px rgba(245, 197, 66, 0.15);
+  }
+
+  /* Sync/Save Status Indicator */
+  .sync-status {
+    font-size: 0.7rem;
+    font-weight: 600;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.2rem;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+    color: var(--success-green);
+  }
+  .sync-status.active {
+    opacity: 1;
+  }
+  .sync-status.saving {
+    color: hsl(var(--primary-base));
+  }
+  .sync-status.error {
+    color: var(--accent-crimson);
+  }
+
+  /* Lightbox styling */
+  .lightbox-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(3, 7, 18, 0.95);
+    z-index: 3000;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    transition: opacity 0.25s ease;
+  }
+  .lightbox-overlay.active {
+    display: flex;
+    opacity: 1;
+  }
+  .lightbox-close-btn {
+    position: absolute;
+    top: 1.5rem;
+    right: 1.5rem;
+    background: none;
+    border: none;
+    color: #ffffff;
+    font-size: 24px;
+    cursor: pointer;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background-color: rgba(255, 255, 255, 0.1);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: var(--transition-smooth);
+  }
+  .lightbox-close-btn:hover {
+    background-color: rgba(255, 255, 255, 0.2);
+    transform: scale(1.05);
+  }
+  .lightbox-image {
+    max-width: 90%;
+    max-height: 85%;
+    object-fit: contain;
+    border-radius: var(--radius-sm);
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+    transform: scale(0.95);
+    transition: transform 0.25s ease;
+  }
+  .lightbox-overlay.active .lightbox-image {
+    transform: scale(1);
+  }
+
+  /* Mobile Responsive for grid layout */
+  @media (max-width: 640px) {
+    .item-grid {
+      grid-template-columns: 1fr !important;
+      max-height: 50vh;
+    }
+    .item-grid.layout-list .item-card {
+      flex-direction: column;
+      align-items: stretch;
+    }
+    .item-grid.layout-list .item-image-box {
+      width: 100%;
+      height: 160px;
+      min-height: auto;
+      border-right: none;
+      border-bottom: 1px solid var(--border-glass);
+    }
+    .item-grid.layout-list .item-image-box .id-tag,
+    .item-grid.layout-list .item-image-box .cost-tag {
+      display: block;
+    }
+    .item-grid.layout-list .item-content {
+      flex-direction: column;
+      align-items: stretch;
+      gap: 0.8rem;
+      padding: 1rem;
+    }
+  }
 </style>
 </head>
 
@@ -2949,6 +3358,11 @@
             title="Submit corrections or app feedback">
             <span class="material-icons-round">rate_review</span>
             <span id="sidebar-feedback-label">Submit Feedback</span>
+          </button>
+          <button class="btn-sidebar-action text-accent" onclick="openCostumeChecklistModal()"
+            title="Verify my checked out costume and prop checklist" id="btn-costume-checklist" style="margin-bottom: 5px;">
+            <span class="material-icons-round">checkroom</span>
+            <span id="sidebar-costume-checklist-label">Costume Checklist</span>
           </button>
           <button class="btn-sidebar-action text-accent" onclick="openUpdateInfoModal()"
             title="Update my profile and health information" id="btn-update-info" style="margin-bottom: 5px;">
@@ -5576,6 +5990,90 @@
     </div>
   </div>
 
+  <!-- Costume & Prop Performer Checklist Modal -->
+  <div id="costume-checklist-modal" class="modal-overlay">
+    <div class="manual-card glassmorphic" style="max-width: 950px; padding: 2rem; width: 90%;">
+      <div class="manual-header" style="margin-bottom: 1.5rem;">
+        <div class="header-left">
+          <span class="material-icons-round text-accent">checkroom</span>
+          <h2 style="font-family: var(--font-family-title); font-size: 1.4rem;" id="costume-checklist-title">Costume & Prop Checklist</h2>
+        </div>
+        <button class="btn-close-manual" onclick="closeCostumeChecklistModal()">
+          <span class="material-icons-round">close</span>
+        </button>
+      </div>
+
+      <!-- Performer Switcher (Admins/Directors only) -->
+      <div id="checklist-performer-switcher-wrapper" class="view-select-container admin-only-section" style="display: none; margin-bottom: 1.5rem; text-align: left;">
+        <span style="font-size: 0.8rem; font-weight: 700; text-transform: uppercase; color: var(--text-muted); letter-spacing: 0.5px; margin-right: 0.5rem;" id="lbl-performer-select">Review Dancer:</span>
+        <select id="checklistPerformerSelect" class="view-select" style="min-width: 240px;" onchange="onChecklistPerformerChanged()">
+          <!-- Populated dynamically via JS -->
+        </select>
+      </div>
+
+      <!-- Stats Summary Section -->
+      <div class="feedback-admin-stats">
+        <div class="feedback-stat-card">
+          <span class="material-icons-round stat-icon">assignment</span>
+          <div>
+            <span class="stat-val" id="checklist-stat-total">0</span>
+            <span class="stat-label" id="lbl-checklist-stat-total">Total Assigned</span>
+          </div>
+        </div>
+        <div class="feedback-stat-card stat-completed">
+          <span class="material-icons-round stat-icon">check_circle</span>
+          <div>
+            <span class="stat-val" id="checklist-stat-confirmed">0</span>
+            <span class="stat-label" id="lbl-checklist-stat-confirmed">Checked</span>
+          </div>
+        </div>
+        <div class="feedback-stat-card stat-pending">
+          <span class="material-icons-round stat-icon">help_outline</span>
+          <div>
+            <span class="stat-val" id="checklist-stat-pending">0</span>
+            <span class="stat-label" id="lbl-checklist-stat-pending">Pending</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Filter/Sort Toolbar -->
+      <div class="dashboard-toolbar" style="display: flex; gap: 1rem; align-items: center; justify-content: space-between; margin-bottom: 1.5rem; flex-wrap: wrap; background: rgba(255,255,255,0.02); padding: 0.75rem 1.25rem; border: 1px solid var(--border-glass); border-radius: 8px; margin-top: 1.5rem;">
+        <div class="toolbar-left" style="display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;">
+          <span style="font-size: 0.8rem; font-weight: 700; text-transform: uppercase; color: var(--text-muted); letter-spacing: 0.5px;" id="lbl-type-filter">Filter:</span>
+          <div class="view-select-container">
+            <select id="checklistTypeFilter" class="view-select" style="min-width: 150px; padding: 0.4rem 2.25rem 0.4rem 1rem; font-size: 0.85rem;" onchange="renderCostumeCards()">
+              <option value="all">🔍 All Types</option>
+            </select>
+          </div>
+        </div>
+        <div class="toolbar-right" style="display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;">
+          <span style="font-size: 0.8rem; font-weight: 700; text-transform: uppercase; color: var(--text-muted); letter-spacing: 0.5px;" id="lbl-layout-filter">Layout:</span>
+          <div class="view-select-container">
+            <select id="checklistLayoutSelect" class="view-select" style="min-width: 150px; padding: 0.4rem 2.25rem 0.4rem 1rem; font-size: 0.85rem;" onchange="changeChecklistLayout()">
+              <option value="layout-large">🖼️ Large Cards</option>
+              <option value="layout-medium" selected>📱 Medium Cards</option>
+              <option value="layout-list">📝 List View</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <!-- Checklist Cards Grid Container -->
+      <div id="costume-checklist-grid" class="item-grid layout-medium">
+        <div style="text-align: center; color: var(--text-muted); padding: 40px; width: 100%;" id="checklist-loading-msg">Loading checklist items...</div>
+      </div>
+
+      <div style="display: flex; justify-content: flex-end; margin-top: 1.5rem;">
+        <button class="btn-primary-glow" onclick="closeCostumeChecklistModal()" style="padding: 0.5rem 1.5rem; border-radius: 6px; width: auto;" id="btn-close-checklist">Close Checklist</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Zoom Lightbox Modal -->
+  <div id="zoom-lightbox-modal" class="lightbox-overlay" onclick="closeZoomLightbox(event)">
+    <button class="lightbox-close-btn" onclick="closeZoomLightbox(event)">&times;</button>
+    <img class="lightbox-image" id="zoom-lightbox-image" src="" alt="Zoomed Inventory Preview">
+
   <!-- Server-Side JavaScript Embed -->
   <script>
   /**
@@ -5590,6 +6088,13 @@
   let currentThemeIndex = 0; // 0=HQ, 1=Tropical, 2=Salsa
   let isDarkMode = true;
   let isWorkerMode = false; // Toggle direct GAS vs CF Worker edge
+
+  // Ported Costume Checklist State
+  let checklistItems = [];
+  let checklistPerformers = [];
+  let checklistSelectedPerformer = "all";
+  let checklistLayout = "layout-medium";
+  let checklistDebounceTimers = {};
 
   let conversations = []; // Saved localStorage chats
   let activeChatId = null;
@@ -5688,7 +6193,35 @@
       recordPaymentDesc: "Registra una contribución de pago en efectivo directamente en el libro de contabilidad de la base de datos externa.",
       lblPayDate: "Fecha del Pago en Efectivo",
       lblPayAmount: "Monto Pagado ($)",
-      btnSubmitPayment: "Enviar Pago"
+      btnSubmitPayment: "Enviar Pago",
+      costumeChecklistTitle: "Lista de Vestuario y Utilería",
+      lblPerformerSelect: "Revisar Bailarín:",
+      lblChecklistStatTotal: "Total Asignados",
+      lblChecklistStatConfirmed: "Confirmados",
+      lblChecklistStatPending: "Pendientes",
+      lblTypeFilter: "Filtrar:",
+      lblLayoutFilter: "Diseño:",
+      btnCloseChecklist: "Cerrar Lista",
+      sidebarCostumeChecklist: "Lista de Vestuario",
+      checklistLoading: "Cargando...",
+      checklistNoItems: "No se encontraron artículos asignados.",
+      lblChecklistStatus: "Estado:",
+      lblChecklistNotes: "Notas del Bailarín:",
+      lblChecklistCost: "Costo:",
+      lblChecklistType: "Tipo:",
+      checklistSaving: "Guardando...",
+      checklistSaved: "¡Guardado!",
+      checklistError: "Error al guardar",
+      statusNotSet: "— (No Establecido)",
+      statusYes: "Sí. Lo tengo",
+      statusReturned: "Lo devolví",
+      statusNever: "Nunca lo recibí.",
+      statusLost: "Lo perdí y necesito reemplazarlo",
+      statusLoaned: "Se lo presté a otro bailarín (Ver Notas)",
+      statusDamaged: "Lo dañé y necesito reemplazarlo",
+      statusUnread: "No puedo leer el ID de la etiqueta.",
+      statusDifferentNumber: "Sí, tengo uno con un número diferente. Ver notas en \"PERFORMER NOTES\"",
+      statusDifferentNumberNew: "Sí, tengo el artículo con un número diferente. (Ver notas del bailarín)"
     },
     en: {
       welcomeTitle: "Welcome, Director",
@@ -5742,7 +6275,35 @@
       recordPaymentDesc: "Record a performer cash payment contribution directly in the external database ledger.",
       lblPayDate: "Cash Payment Date",
       lblPayAmount: "Paid Amount ($)",
-      btnSubmitPayment: "Submit Payment"
+      btnSubmitPayment: "Submit Payment",
+      costumeChecklistTitle: "Costume & Prop Checklist",
+      lblPerformerSelect: "Review Dancer:",
+      lblChecklistStatTotal: "Total Assigned",
+      lblChecklistStatConfirmed: "Checked",
+      lblChecklistStatPending: "Pending",
+      lblTypeFilter: "Filter:",
+      lblLayoutFilter: "Layout:",
+      btnCloseChecklist: "Close Checklist",
+      sidebarCostumeChecklist: "Costume Checklist",
+      checklistLoading: "Loading...",
+      checklistNoItems: "No assigned items located.",
+      lblChecklistStatus: "Status:",
+      lblChecklistNotes: "Performer Notes:",
+      lblChecklistCost: "Cost:",
+      lblChecklistType: "Type:",
+      checklistSaving: "Saving...",
+      checklistSaved: "Saved!",
+      checklistError: "Save error",
+      statusNotSet: "— (Not Set)",
+      statusYes: "Yes. I got it",
+      statusReturned: "I returned it",
+      statusNever: "I never received it.",
+      statusLost: "I lost it and need to replace it",
+      statusLoaned: "I loaned it to another performer (See Notes)",
+      statusDamaged: "I damaged it and need to replace it",
+      statusUnread: "I cannot read the label ID.",
+      statusDifferentNumber: "Yes I have one with a diferent number. See \"PERFORMER NOTES\" NOTES",
+      statusDifferentNumberNew: "Yes, I have the item with a different number. (See Performer Notes)"
     }
   };
 
@@ -5800,6 +6361,7 @@
         .loadServerSettings();
     }
   }
+
 
   /**
    * Double-Lock Security Authentication gateway.
@@ -5995,7 +6557,6 @@
     sessionUser = null;
     document.getElementById("app-container").classList.add("hidden");
     document.getElementById("login-overlay").classList.remove("hidden");
-
     // Clear inputs
     document.getElementById("login-email").value = "";
     document.getElementById("login-pin").value = "";
@@ -6151,6 +6712,35 @@
 
     const btnSubmitPayment = document.getElementById("btn-submit-payment");
     if (btnSubmitPayment) btnSubmitPayment.innerText = dict.btnSubmitPayment;
+
+    // Translate Costume Checklist modal elements
+    const costumeChecklistTitle = document.getElementById("costume-checklist-title");
+    if (costumeChecklistTitle) costumeChecklistTitle.innerText = dict.costumeChecklistTitle;
+
+    const lblPerformerSelect = document.getElementById("lbl-performer-select");
+    if (lblPerformerSelect) lblPerformerSelect.innerText = dict.lblPerformerSelect;
+
+    const lblChecklistStatTotal = document.getElementById("lbl-checklist-stat-total");
+    if (lblChecklistStatTotal) lblChecklistStatTotal.innerText = dict.lblChecklistStatTotal;
+
+    const lblChecklistStatConfirmed = document.getElementById("lbl-checklist-stat-confirmed");
+    if (lblChecklistStatConfirmed) lblChecklistStatConfirmed.innerText = dict.lblChecklistStatConfirmed;
+
+    const lblChecklistStatPending = document.getElementById("lbl-checklist-stat-pending");
+    if (lblChecklistStatPending) lblChecklistStatPending.innerText = dict.lblChecklistStatPending;
+
+    const lblTypeFilter = document.getElementById("lbl-type-filter");
+    if (lblTypeFilter) lblTypeFilter.innerText = dict.lblTypeFilter;
+
+    const lblLayoutFilter = document.getElementById("lbl-layout-filter");
+    if (lblLayoutFilter) lblLayoutFilter.innerText = dict.lblLayoutFilter;
+
+    const btnCloseChecklist = document.getElementById("btn-close-checklist");
+    if (btnCloseChecklist) btnCloseChecklist.innerText = dict.btnCloseChecklist;
+
+    const lblSidebarCostumeChecklist = document.getElementById("sidebar-costume-checklist-label");
+    if (lblSidebarCostumeChecklist) lblSidebarCostumeChecklist.innerText = dict.sidebarCostumeChecklist;
+
     // Translate Technical Manual modal elements
     const manualTitle = document.getElementById("manual-modal-title");
     if (manualTitle) manualTitle.innerText = currentLanguage === 'es' ? "Manual de Operaciones e Integración" : "Operations & Integration Manual";
@@ -6532,6 +7122,9 @@
     feed.appendChild(msgDiv);
     scrollToBottom();
   }
+
+  // TEXT-TO-SPEECH (TTS) NATIVE CONTROLLER WITH HIGH-FIDELITY VOICE SELECTOR
+  let currentUtterance = null;
 
   function selectVoice(lang) {
     if (typeof window === 'undefined' || !window.speechSynthesis) return null;
@@ -7496,8 +8089,6 @@
   // 11. MOCK BACKEND LOCAL PREVIEW SYSTEM (Supports testing completely offline)
   const MOCK_PROFILES = [
     { email: "director@tradicion.com", pin: "3999", name: "Angel Alberto Rodriguez Serrano", id: "TD-MASTER", role: "director", gender: "male", title: "Director" },
-    { email: "rodriguez2113@gmail.com", pin: "3999", name: "Angel A. Rodriguez", id: "TD-RODRIGUEZ", role: "director", gender: "male", title: "Director" },
-    { email: "darienl140@gmail.com", pin: "3999", name: "Darien", id: "TD-DARIEN", role: "director", gender: "male", title: "Director" },
     { email: "dancer1@tradicion.com", pin: "2001", name: "Gabriel Rivera", id: "TD-001", role: "performer", gender: "male", title: "Dancer" },
     { email: "dancer2@tradicion.com", pin: "2002", name: "Isabela Ortiz", id: "TD-002", role: "performer", gender: "female", title: "Dancer" },
     { email: "darien@tradicion.com", pin: "2003", name: "Darien", id: "TD-003", role: "performer", gender: "female", title: "Sub-Director" }
@@ -9007,8 +9598,491 @@
             : "Cash payment registration simulated successfully offline (Mock)!");
         }, 1000);
       }
+  }
+
+  // ==========================================
+  // PORTED COSTUME & PROP CHECKLIST CONTROLLER
+  // ==========================================
+
+  function openCostumeChecklistModal() {
+    document.getElementById("costume-checklist-modal").classList.add("active");
+    
+    // Determine admin/director switcher display status
+    const switcherWrapper = document.getElementById("checklist-performer-switcher-wrapper");
+    const isAdminUser = sessionUser.email === "rodriguez2113@gmail.com" || sessionUser.email === "darienl140@gmail.com" || sessionUser.clearance === "director";
+    
+    if (isAdminUser) {
+      if (switcherWrapper) switcherWrapper.style.display = "block";
+    } else {
+      if (switcherWrapper) switcherWrapper.style.display = "none";
+    }
+    
+    // Clear and show loading state
+    const grid = document.getElementById("costume-checklist-grid");
+    const dict = i18n[currentLanguage];
+    grid.innerHTML = `<div style="text-align: center; color: var(--text-muted); padding: 40px; width: 100%;" id="checklist-loading-msg">${dict.checklistLoading || "Loading checklist items..."}</div>`;
+    
+    checklistSelectedPerformer = "all";
+    fetchCostumeChecklist();
+  }
+
+  function closeCostumeChecklistModal() {
+    document.getElementById("costume-checklist-modal").classList.remove("active");
+  }
+
+  function fetchCostumeChecklist() {
+    const email = sessionUser.email;
+    const pin = getPINAuth();
+    const isHybrid = document.getElementById("architecture-toggle").classList.contains("active");
+    const dict = i18n[currentLanguage];
+    
+    const requestPayload = {
+      email: email,
+      pin: pin,
+      action: "getInventoryChecklist",
+      selectedEmail: checklistSelectedPerformer,
+      query: "Get checklist items"
+    };
+
+    const handleSuccess = (data) => {
+      if (data && data.success) {
+        checklistItems = data.items || [];
+        
+        // Populate performers switcher dropdown if admin and not already loaded
+        if (data.isAdminUser && data.performersList && checklistPerformers.length === 0) {
+          checklistPerformers = data.performersList;
+          const selectEl = document.getElementById("checklistPerformerSelect");
+          if (selectEl) {
+            selectEl.innerHTML = "";
+            
+            const allOpt = document.createElement("option");
+            allOpt.value = "all";
+            allOpt.textContent = dict.switcherAll || "👥 All Performers / Items";
+            selectEl.appendChild(allOpt);
+            
+            const unassignedOpt = document.createElement("option");
+            unassignedOpt.value = "unassigned";
+            unassignedOpt.textContent = dict.switcherUnassigned || "🔓 Unassigned / Available Items";
+            selectEl.appendChild(unassignedOpt);
+            
+            checklistPerformers.forEach(perf => {
+              const opt = document.createElement("option");
+              opt.value = perf.email;
+              opt.textContent = `${perf.name || "Unknown"} (${perf.email})`;
+              selectEl.appendChild(opt);
+            });
+            selectEl.value = checklistSelectedPerformer;
+          }
+        }
+        
+        // Populate type filter dropdown dynamically
+        populateChecklistTypeFilter();
+        
+        // Render cards
+        renderCostumeCards();
+      } else {
+        const grid = document.getElementById("costume-checklist-grid");
+        grid.innerHTML = `<div style="text-align: center; color: var(--accent-crimson); padding: 40px; width: 100%;">${data ? data.error : "Failed to load checklist."}</div>`;
+      }
+    };
+
+    const handleFailure = (err) => {
+      const grid = document.getElementById("costume-checklist-grid");
+      grid.innerHTML = `<div style="text-align: center; color: var(--accent-crimson); padding: 40px; width: 100%;">Connection Error: ${err.toString()}</div>`;
+    };
+
+    if (isHybrid) {
+      const workerUrl = getNetworkSetting("worker_url");
+      const appsScriptUrl = getNetworkSetting("gas_url");
+      const geminiKey = getNetworkSetting("gemini_key");
+      
+      fetch(workerUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Apps-Script-Url": appsScriptUrl,
+          "X-Gemini-Key": geminiKey
+        },
+        body: JSON.stringify(requestPayload)
+      })
+      .then(res => res.json())
+      .then(handleSuccess)
+      .catch(handleFailure);
+    } else {
+      if (typeof google !== 'undefined' && google.script && google.script.run) {
+        google.script.run
+          .withSuccessHandler(handleSuccess)
+          .withFailureHandler(handleFailure)
+          .directGetInventoryChecklist(email, pin, checklistSelectedPerformer);
+      } else {
+        // Offline mock runner
+        setTimeout(() => {
+          const mockData = {
+            success: true,
+            isAdminUser: email === "rodriguez2113@gmail.com" || email === "darienl140@gmail.com",
+            items: [
+              { rowIndex: 2, id: "C-101", description: "Mock Salsa Red Vest", picUrl: "https://www.dropbox.com/s/mock1/red_vest.jpg?dl=0", cost: "45.00", status: "Yes. I got it", notes: "Fits well.", assigned: email, type: "Costume" },
+              { rowIndex: 3, id: "P-202", description: "Mock Salsa Dance Shoes", picUrl: "", cost: "85.00", status: "-", notes: "", assigned: email, type: "Prop" }
+            ],
+            performersList: [
+              { email: "dancer1@gmail.com", name: "Dancer One" },
+              { email: "dancer2@gmail.com", name: "Dancer Two" }
+            ]
+          };
+          handleSuccess(mockData);
+        }, 800);
+      }
     }
   }
+
+  function populateChecklistTypeFilter() {
+    const filterEl = document.getElementById("checklistTypeFilter");
+    if (!filterEl) return;
+    
+    const dict = i18n[currentLanguage];
+    const currentVal = filterEl.value || "all";
+    filterEl.innerHTML = `<option value="all">${dict.allTypes || "🔍 All Types"}</option>`;
+    
+    const types = new Set();
+    checklistItems.forEach(item => {
+      if (item && item.type) {
+        const trimmed = item.type.trim();
+        if (trimmed) types.add(trimmed);
+      }
+    });
+    
+    Array.from(types).sort().forEach(type => {
+      const opt = document.createElement("option");
+      opt.value = type;
+      opt.textContent = type;
+      filterEl.appendChild(opt);
+    });
+    
+    if (types.has(currentVal)) {
+      filterEl.value = currentVal;
+    } else {
+      filterEl.value = "all";
+    }
+  }
+
+  function renderCostumeCards() {
+    const grid = document.getElementById("costume-checklist-grid");
+    if (!grid) return;
+    
+    grid.innerHTML = "";
+    
+    const dict = i18n[currentLanguage];
+    const selectedType = document.getElementById("checklistTypeFilter").value;
+    
+    let filtered = [...checklistItems];
+    if (selectedType && selectedType !== "all") {
+      filtered = filtered.filter(item => item && item.type === selectedType);
+    }
+    
+    // Update stats counters
+    updateChecklistStats(filtered);
+    
+    if (filtered.length === 0) {
+      grid.innerHTML = `
+        <div class="empty-state" style="grid-column: 1 / -1;">
+          <span class="material-icons-round" style="font-size:48px; color:var(--text-muted);">inventory_2</span>
+          <h3>${dict.noItemsTitle || "No Items Found"}</h3>
+          <p>${dict.checklistNoItems || "No assigned items located."}</p>
+        </div>
+      `;
+      return;
+    }
+
+    filtered.forEach(item => {
+      const card = document.createElement("div");
+      card.className = "item-card";
+      card.id = `checklist-card-${item.rowIndex}`;
+      
+      const isUnset = !item.status || item.status.trim() === "" || item.status.trim() === "-";
+      let selectClass = "val-unset";
+      if (item.status === "Yes. I got it") selectClass = "val-yes";
+      else if (item.status === "I returned it") selectClass = "val-returned";
+      else if (item.status === "I never received it.") selectClass = "val-never";
+      else if (item.status === "I lost it and need to replace it") selectClass = "val-lost";
+      else if (item.status === "I loaned it to another performer (See Notes)") selectClass = "val-loaned";
+      else if (item.status === "I damaged it and need to replace it") selectClass = "val-damaged";
+      else if (item.status === "I cannot read the label ID.") selectClass = "val-unread";
+      else if (item.status === "Yes I have one with a diferent number. See \"PERFORMER NOTES\" NOTES" || item.status === "Yes, I have the item with a different number. (See Performer Notes)") selectClass = "val-different";
+      
+      const convertedImgUrl = convertDropboxUrl(item.picUrl);
+      let imageHtml = "";
+      if (convertedImgUrl) {
+        imageHtml = `<img src="${convertedImgUrl}" class="item-img" alt="${escapeHtml(item.description)}" onerror="handleChecklistImageError(this)">`;
+      } else {
+        const fallbackText = currentLanguage === 'es' ? 'Vista previa no disponible' : 'No image preview available';
+        imageHtml = `
+          <div class="item-img-placeholder">
+            <span class="material-icons-round">image_not_supported</span>
+            <span style="font-size:11px;">${fallbackText}</span>
+          </div>
+        `;
+      }
+
+      const isAdminUser = sessionUser.email === "rodriguez2113@gmail.com" || sessionUser.email === "darienl140@gmail.com" || sessionUser.clearance === "director";
+
+      card.innerHTML = `
+        <div class="item-image-box" onclick="openZoomLightbox('${convertedImgUrl}', '${escapeHtml(item.description)}')">
+          ${imageHtml}
+          <span class="id-tag">ID: ${item.id || 'N/A'}</span>
+          <span class="cost-tag">${dict.lblChecklistCost} $${item.cost || 'N/A'}</span>
+        </div>
+        <div class="item-content">
+          <div class="item-info">
+            <h3 class="item-title">${item.description}</h3>
+            <div class="item-meta-badges">
+              <span class="meta-badge">ID: ${item.id || 'N/A'}</span>
+              <span class="meta-badge badge-gold">${dict.lblChecklistCost} $${item.cost || 'N/A'}</span>
+              <span class="meta-badge badge-type">${dict.lblChecklistType} ${item.type || 'General'}</span>
+              ${isAdminUser ? `<span class="meta-badge" style="color: #3b82f6; border-color: rgba(59, 130, 246, 0.25);">${dict.assignedLabel || "Assigned:"} ${item.assigned || 'Unassigned'}</span>` : ''}
+            </div>
+          </div>
+          
+          <div class="status-group">
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+              <label class="status-label">${dict.lblChecklistStatus}</label>
+              <span id="checklist-sync-${item.rowIndex}" class="sync-status">
+                <span class="spinner" style="display:none; width:10px; height:10px; border-width:1.5px; margin-right: 3px;"></span>
+                <span>${dict.checklistSaved || "Saved"}</span>
+              </span>
+            </div>
+            <div class="status-select-wrapper">
+              <select class="status-select ${selectClass}" id="checklist-status-${item.rowIndex}" onchange="saveCostumeField(${item.rowIndex}, '${item.id}', 'status')">
+                <option value="-" ${item.status === '-' || isUnset ? 'selected' : ''}>${dict.statusNotSet}</option>
+                <option value="Yes. I got it" ${item.status === 'Yes. I got it' ? 'selected' : ''}>${dict.statusYes}</option>
+                <option value="I returned it" ${item.status === 'I returned it' ? 'selected' : ''}>${dict.statusReturned}</option>
+                <option value="I never received it." ${item.status === 'I never received it.' ? 'selected' : ''}>${dict.statusNever}</option>
+                <option value="I lost it and need to replace it" ${item.status === 'I lost it and need to replace it' ? 'selected' : ''}>${dict.statusLost}</option>
+                <option value="I loaned it to another performer (See Notes)" ${item.status === 'I loaned it to another performer (See Notes)' ? 'selected' : ''}>${dict.statusLoaned}</option>
+                <option value="I damaged it and need to replace it" ${item.status === 'I damaged it and need to replace it' ? 'selected' : ''}>${dict.statusDamaged}</option>
+                <option value="I cannot read the label ID." ${item.status === 'I cannot read the label ID.' ? 'selected' : ''}>${dict.statusUnread}</option>
+                <option value="Yes I have one with a diferent number. See &quot;PERFORMER NOTES&quot; NOTES" ${item.status === 'Yes I have one with a diferent number. See "PERFORMER NOTES" NOTES' ? 'selected' : ''}>${dict.statusDifferentNumber}</option>
+                <option value="Yes, I have the item with a different number. (See Performer Notes)" ${item.status === 'Yes, I have the item with a different number. (See Performer Notes)' ? 'selected' : ''}>${dict.statusDifferentNumberNew}</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="notes-group">
+            <label class="notes-label">
+              <span>${dict.lblChecklistNotes}</span>
+            </label>
+            <textarea class="notes-textarea" id="checklist-notes-${item.rowIndex}" placeholder="${dict.notesPlaceholder}" oninput="debounceChecklistSave(${item.rowIndex}, '${item.id}')" onblur="blurChecklistSave(${item.rowIndex}, '${item.id}')">${item.notes || ''}</textarea>
+          </div>
+        </div>
+      `;
+      grid.appendChild(card);
+    });
+    
+    // Force layout style class
+    changeChecklistLayout();
+  }
+
+  function updateChecklistStats(itemsList) {
+    const total = itemsList.length;
+    let confirmed = 0;
+    
+    itemsList.forEach(item => {
+      if (item && item.status && item.status.trim() !== "" && item.status.trim() !== "-") {
+        confirmed++;
+      }
+    });
+    
+    document.getElementById("checklist-stat-total").textContent = total;
+    document.getElementById("checklist-stat-confirmed").textContent = confirmed;
+    document.getElementById("checklist-stat-pending").textContent = total - confirmed;
+  }
+
+  function handleChecklistImageError(img) {
+    const container = img.parentElement;
+    container.innerHTML = `
+      <div class="item-img-placeholder">
+        <span class="material-icons-round" style="color:var(--accent-crimson);">error_outline</span>
+        <span style="font-size:10px;">Error loading image</span>
+      </div>
+    `;
+  }
+
+  function changeChecklistLayout() {
+    const select = document.getElementById("checklistLayoutSelect");
+    const grid = document.getElementById("costume-checklist-grid");
+    if (!select || !grid) return;
+    
+    const layout = select.value;
+    grid.className = "item-grid"; // reset
+    grid.classList.add(layout);
+  }
+
+  function onChecklistPerformerChanged() {
+    const select = document.getElementById("checklistPerformerSelect");
+    if (!select) return;
+    
+    checklistSelectedPerformer = select.value;
+    
+    const grid = document.getElementById("costume-checklist-grid");
+    const dict = i18n[currentLanguage];
+    grid.innerHTML = `<div style="text-align: center; color: var(--text-muted); padding: 40px; width: 100%;" id="checklist-loading-msg">${dict.checklistLoading || "Loading checklist items..."}</div>`;
+    
+    fetchCostumeChecklist();
+  }
+
+  function saveCostumeField(rowIndex, expectedId, triggerField) {
+    const selectEl = document.getElementById(`checklist-status-${rowIndex}`);
+    const notesEl = document.getElementById(`checklist-notes-${rowIndex}`);
+    const statusIndicator = document.getElementById(`checklist-sync-${rowIndex}`);
+    
+    const newStatus = selectEl.value;
+    const notesText = notesEl.value;
+    const dict = i18n[currentLanguage];
+
+    // Reset and assign dropdown borders based on state value
+    selectEl.className = "status-select"; // reset
+    if (newStatus === "Yes. I got it") selectEl.classList.add("val-yes");
+    else if (newStatus === "I returned it") selectEl.classList.add("val-returned");
+    else if (newStatus === "I never received it.") selectEl.classList.add("val-never");
+    else if (newStatus === "I lost it and need to replace it") selectEl.classList.add("val-lost");
+    else if (newStatus === "I loaned it to another performer (See Notes)") selectEl.classList.add("val-loaned");
+    else if (newStatus === "I damaged it and need to replace it") selectEl.classList.add("val-damaged");
+    else if (newStatus === "I cannot read the label ID.") selectEl.classList.add("val-unread");
+    else if (newStatus === "Yes I have one with a diferent number. See \"PERFORMER NOTES\" NOTES" || newStatus === "Yes, I have the item with a different number. (See Performer Notes)") selectEl.classList.add("val-different");
+    else selectEl.classList.add("val-unset");
+
+    // Display saving spinner
+    statusIndicator.className = "sync-status active saving";
+    statusIndicator.querySelector('span:last-child').textContent = dict.checklistSaving || "Saving...";
+    statusIndicator.querySelector('.spinner').style.display = "inline-block";
+
+    const email = sessionUser.email;
+    const pin = getPINAuth();
+    const isHybrid = document.getElementById("architecture-toggle").classList.contains("active");
+
+    const requestPayload = {
+      email: email,
+      pin: pin,
+      action: "saveInventoryField",
+      rowIndex: rowIndex,
+      expectedId: expectedId,
+      newStatus: newStatus,
+      performerNotes: notesText,
+      query: "Save checklist cell"
+    };
+
+    const handleSuccess = (response) => {
+      if (response && response.success) {
+        statusIndicator.className = "sync-status active";
+        statusIndicator.querySelector('span:last-child').innerHTML = "&#x2713; " + (dict.checklistSaved || "Saved");
+        statusIndicator.querySelector('.spinner').style.display = "none";
+        
+        // Update local memory state cache
+        const index = checklistItems.findIndex(item => item.rowIndex === rowIndex);
+        if (index !== -1) {
+          checklistItems[index].status = newStatus;
+          checklistItems[index].notes = notesText;
+          if (response.resolvedRowIndex && response.resolvedRowIndex !== rowIndex) {
+            checklistItems[index].rowIndex = response.resolvedRowIndex;
+          }
+        }
+        
+        // Re-run stats counters
+        updateChecklistStats(checklistItems);
+
+        setTimeout(() => {
+          if (statusIndicator.classList.contains('active') && !statusIndicator.classList.contains('saving')) {
+            statusIndicator.classList.remove('active');
+          }
+        }, 2000);
+      } else {
+        handleFailure(response ? response.error : "Unknown save error.");
+      }
+    };
+
+    const handleFailure = (err) => {
+      statusIndicator.className = "sync-status active error";
+      statusIndicator.querySelector('span:last-child').textContent = dict.checklistError || "Save error";
+      statusIndicator.querySelector('.spinner').style.display = "none";
+      showToast((dict.toastSaveError || "Error saving: ") + err, "error");
+    };
+
+    if (isHybrid) {
+      const workerUrl = getNetworkSetting("worker_url");
+      const appsScriptUrl = getNetworkSetting("gas_url");
+      const geminiKey = getNetworkSetting("gemini_key");
+
+      fetch(workerUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Apps-Script-Url": appsScriptUrl,
+          "X-Gemini-Key": geminiKey
+        },
+        body: JSON.stringify(requestPayload)
+      })
+      .then(res => res.json())
+      .then(handleSuccess)
+      .catch(handleFailure);
+    } else {
+      if (typeof google !== 'undefined' && google.script && google.script.run) {
+        google.script.run
+          .withSuccessHandler(handleSuccess)
+          .withFailureHandler(handleFailure)
+          .directSaveInventoryField(email, pin, rowIndex, expectedId, newStatus, notesText);
+      } else {
+        // Offline mock save
+        setTimeout(() => {
+          handleSuccess({ success: true });
+        }, 1000);
+      }
+    }
+  }
+
+  function debounceChecklistSave(rowIndex, itemId) {
+    const statusIndicator = document.getElementById(`checklist-sync-${rowIndex}`);
+    const dict = i18n[currentLanguage];
+    statusIndicator.className = "sync-status active saving";
+    statusIndicator.querySelector('span:last-child').textContent = dict.typing || "Typing...";
+    statusIndicator.querySelector('.spinner').style.display = "none";
+
+    if (checklistDebounceTimers[rowIndex]) {
+      clearTimeout(checklistDebounceTimers[rowIndex]);
+    }
+
+    checklistDebounceTimers[rowIndex] = setTimeout(() => {
+      saveCostumeField(rowIndex, itemId, 'notes');
+      delete checklistDebounceTimers[rowIndex];
+    }, 1200);
+  }
+
+  function blurChecklistSave(rowIndex, itemId) {
+    if (checklistDebounceTimers[rowIndex]) {
+      clearTimeout(checklistDebounceTimers[rowIndex]);
+      delete checklistDebounceTimers[rowIndex];
+      saveCostumeField(rowIndex, itemId, 'notes');
+    }
+  }
+
+  function openZoomLightbox(src, description) {
+    if (!src) return;
+    const lightbox = document.getElementById("zoom-lightbox-modal");
+    const img = document.getElementById("zoom-lightbox-image");
+    
+    img.src = src;
+    img.alt = description;
+    lightbox.classList.add("active");
+  }
+
+  function closeZoomLightbox(event) {
+    if (event.target.classList.contains("lightbox-overlay") || event.target.classList.contains("lightbox-close-btn") || event.type === 'click') {
+      const lightbox = document.getElementById("zoom-lightbox-modal");
+      lightbox.classList.remove("active");
+      setTimeout(() => {
+        document.getElementById("zoom-lightbox-image").src = "";
+      }, 250);
+    }
+  }
+}
 </script>
 </body>
 

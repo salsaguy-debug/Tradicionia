@@ -12,6 +12,13 @@
   let isDarkMode = true;
   let isWorkerMode = false; // Toggle direct GAS vs CF Worker edge
 
+  // Ported Costume Checklist State
+  let checklistItems = [];
+  let checklistPerformers = [];
+  let checklistSelectedPerformer = "all";
+  let checklistLayout = "layout-medium";
+  let checklistDebounceTimers = {};
+
   let conversations = []; // Saved localStorage chats
   let activeChatId = null;
   let targetContextNodeId = null; // Stored for custom context actions
@@ -109,7 +116,35 @@
       recordPaymentDesc: "Registra una contribución de pago en efectivo directamente en el libro de contabilidad de la base de datos externa.",
       lblPayDate: "Fecha del Pago en Efectivo",
       lblPayAmount: "Monto Pagado ($)",
-      btnSubmitPayment: "Enviar Pago"
+      btnSubmitPayment: "Enviar Pago",
+      costumeChecklistTitle: "Lista de Vestuario y Utilería",
+      lblPerformerSelect: "Revisar Bailarín:",
+      lblChecklistStatTotal: "Total Asignados",
+      lblChecklistStatConfirmed: "Confirmados",
+      lblChecklistStatPending: "Pendientes",
+      lblTypeFilter: "Filtrar:",
+      lblLayoutFilter: "Diseño:",
+      btnCloseChecklist: "Cerrar Lista",
+      sidebarCostumeChecklist: "Lista de Vestuario",
+      checklistLoading: "Cargando...",
+      checklistNoItems: "No se encontraron artículos asignados.",
+      lblChecklistStatus: "Estado:",
+      lblChecklistNotes: "Notas del Bailarín:",
+      lblChecklistCost: "Costo:",
+      lblChecklistType: "Tipo:",
+      checklistSaving: "Guardando...",
+      checklistSaved: "¡Guardado!",
+      checklistError: "Error al guardar",
+      statusNotSet: "— (No Establecido)",
+      statusYes: "Sí. Lo tengo",
+      statusReturned: "Lo devolví",
+      statusNever: "Nunca lo recibí.",
+      statusLost: "Lo perdí y necesito reemplazarlo",
+      statusLoaned: "Se lo presté a otro bailarín (Ver Notas)",
+      statusDamaged: "Lo dañé y necesito reemplazarlo",
+      statusUnread: "No puedo leer el ID de la etiqueta.",
+      statusDifferentNumber: "Sí, tengo uno con un número diferente. Ver notas en \"PERFORMER NOTES\"",
+      statusDifferentNumberNew: "Sí, tengo el artículo con un número diferente. (Ver notas del bailarín)"
     },
     en: {
       welcomeTitle: "Welcome, Director",
@@ -163,7 +198,35 @@
       recordPaymentDesc: "Record a performer cash payment contribution directly in the external database ledger.",
       lblPayDate: "Cash Payment Date",
       lblPayAmount: "Paid Amount ($)",
-      btnSubmitPayment: "Submit Payment"
+      btnSubmitPayment: "Submit Payment",
+      costumeChecklistTitle: "Costume & Prop Checklist",
+      lblPerformerSelect: "Review Dancer:",
+      lblChecklistStatTotal: "Total Assigned",
+      lblChecklistStatConfirmed: "Checked",
+      lblChecklistStatPending: "Pending",
+      lblTypeFilter: "Filter:",
+      lblLayoutFilter: "Layout:",
+      btnCloseChecklist: "Close Checklist",
+      sidebarCostumeChecklist: "Costume Checklist",
+      checklistLoading: "Loading...",
+      checklistNoItems: "No assigned items located.",
+      lblChecklistStatus: "Status:",
+      lblChecklistNotes: "Performer Notes:",
+      lblChecklistCost: "Cost:",
+      lblChecklistType: "Type:",
+      checklistSaving: "Saving...",
+      checklistSaved: "Saved!",
+      checklistError: "Save error",
+      statusNotSet: "— (Not Set)",
+      statusYes: "Yes. I got it",
+      statusReturned: "I returned it",
+      statusNever: "I never received it.",
+      statusLost: "I lost it and need to replace it",
+      statusLoaned: "I loaned it to another performer (See Notes)",
+      statusDamaged: "I damaged it and need to replace it",
+      statusUnread: "I cannot read the label ID.",
+      statusDifferentNumber: "Yes I have one with a diferent number. See \"PERFORMER NOTES\" NOTES",
+      statusDifferentNumberNew: "Yes, I have the item with a different number. (See Performer Notes)"
     }
   };
 
@@ -572,6 +635,35 @@
 
     const btnSubmitPayment = document.getElementById("btn-submit-payment");
     if (btnSubmitPayment) btnSubmitPayment.innerText = dict.btnSubmitPayment;
+
+    // Translate Costume Checklist modal elements
+    const costumeChecklistTitle = document.getElementById("costume-checklist-title");
+    if (costumeChecklistTitle) costumeChecklistTitle.innerText = dict.costumeChecklistTitle;
+
+    const lblPerformerSelect = document.getElementById("lbl-performer-select");
+    if (lblPerformerSelect) lblPerformerSelect.innerText = dict.lblPerformerSelect;
+
+    const lblChecklistStatTotal = document.getElementById("lbl-checklist-stat-total");
+    if (lblChecklistStatTotal) lblChecklistStatTotal.innerText = dict.lblChecklistStatTotal;
+
+    const lblChecklistStatConfirmed = document.getElementById("lbl-checklist-stat-confirmed");
+    if (lblChecklistStatConfirmed) lblChecklistStatConfirmed.innerText = dict.lblChecklistStatConfirmed;
+
+    const lblChecklistStatPending = document.getElementById("lbl-checklist-stat-pending");
+    if (lblChecklistStatPending) lblChecklistStatPending.innerText = dict.lblChecklistStatPending;
+
+    const lblTypeFilter = document.getElementById("lbl-type-filter");
+    if (lblTypeFilter) lblTypeFilter.innerText = dict.lblTypeFilter;
+
+    const lblLayoutFilter = document.getElementById("lbl-layout-filter");
+    if (lblLayoutFilter) lblLayoutFilter.innerText = dict.lblLayoutFilter;
+
+    const btnCloseChecklist = document.getElementById("btn-close-checklist");
+    if (btnCloseChecklist) btnCloseChecklist.innerText = dict.btnCloseChecklist;
+
+    const lblSidebarCostumeChecklist = document.getElementById("sidebar-costume-checklist-label");
+    if (lblSidebarCostumeChecklist) lblSidebarCostumeChecklist.innerText = dict.sidebarCostumeChecklist;
+
     // Translate Technical Manual modal elements
     const manualTitle = document.getElementById("manual-modal-title");
     if (manualTitle) manualTitle.innerText = currentLanguage === 'es' ? "Manual de Operaciones e Integración" : "Operations & Integration Manual";
@@ -3429,6 +3521,489 @@
             : "Cash payment registration simulated successfully offline (Mock)!");
         }, 1000);
       }
+  }
+
+  // ==========================================
+  // PORTED COSTUME & PROP CHECKLIST CONTROLLER
+  // ==========================================
+
+  function openCostumeChecklistModal() {
+    document.getElementById("costume-checklist-modal").classList.add("active");
+    
+    // Determine admin/director switcher display status
+    const switcherWrapper = document.getElementById("checklist-performer-switcher-wrapper");
+    const isAdminUser = sessionUser.email === "rodriguez2113@gmail.com" || sessionUser.email === "darienl140@gmail.com" || sessionUser.clearance === "director";
+    
+    if (isAdminUser) {
+      if (switcherWrapper) switcherWrapper.style.display = "block";
+    } else {
+      if (switcherWrapper) switcherWrapper.style.display = "none";
+    }
+    
+    // Clear and show loading state
+    const grid = document.getElementById("costume-checklist-grid");
+    const dict = i18n[currentLanguage];
+    grid.innerHTML = `<div style="text-align: center; color: var(--text-muted); padding: 40px; width: 100%;" id="checklist-loading-msg">${dict.checklistLoading || "Loading checklist items..."}</div>`;
+    
+    checklistSelectedPerformer = "all";
+    fetchCostumeChecklist();
+  }
+
+  function closeCostumeChecklistModal() {
+    document.getElementById("costume-checklist-modal").classList.remove("active");
+  }
+
+  function fetchCostumeChecklist() {
+    const email = sessionUser.email;
+    const pin = getPINAuth();
+    const isHybrid = document.getElementById("architecture-toggle").classList.contains("active");
+    const dict = i18n[currentLanguage];
+    
+    const requestPayload = {
+      email: email,
+      pin: pin,
+      action: "getInventoryChecklist",
+      selectedEmail: checklistSelectedPerformer,
+      query: "Get checklist items"
+    };
+
+    const handleSuccess = (data) => {
+      if (data && data.success) {
+        checklistItems = data.items || [];
+        
+        // Populate performers switcher dropdown if admin and not already loaded
+        if (data.isAdminUser && data.performersList && checklistPerformers.length === 0) {
+          checklistPerformers = data.performersList;
+          const selectEl = document.getElementById("checklistPerformerSelect");
+          if (selectEl) {
+            selectEl.innerHTML = "";
+            
+            const allOpt = document.createElement("option");
+            allOpt.value = "all";
+            allOpt.textContent = dict.switcherAll || "👥 All Performers / Items";
+            selectEl.appendChild(allOpt);
+            
+            const unassignedOpt = document.createElement("option");
+            unassignedOpt.value = "unassigned";
+            unassignedOpt.textContent = dict.switcherUnassigned || "🔓 Unassigned / Available Items";
+            selectEl.appendChild(unassignedOpt);
+            
+            checklistPerformers.forEach(perf => {
+              const opt = document.createElement("option");
+              opt.value = perf.email;
+              opt.textContent = `${perf.name || "Unknown"} (${perf.email})`;
+              selectEl.appendChild(opt);
+            });
+            selectEl.value = checklistSelectedPerformer;
+          }
+        }
+        
+        // Populate type filter dropdown dynamically
+        populateChecklistTypeFilter();
+        
+        // Render cards
+        renderCostumeCards();
+      } else {
+        const grid = document.getElementById("costume-checklist-grid");
+        grid.innerHTML = `<div style="text-align: center; color: var(--accent-crimson); padding: 40px; width: 100%;">${data ? data.error : "Failed to load checklist."}</div>`;
+      }
+    };
+
+    const handleFailure = (err) => {
+      const grid = document.getElementById("costume-checklist-grid");
+      grid.innerHTML = `<div style="text-align: center; color: var(--accent-crimson); padding: 40px; width: 100%;">Connection Error: ${err.toString()}</div>`;
+    };
+
+    if (isHybrid) {
+      const workerUrl = getNetworkSetting("worker_url");
+      const appsScriptUrl = getNetworkSetting("gas_url");
+      const geminiKey = getNetworkSetting("gemini_key");
+      
+      fetch(workerUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Apps-Script-Url": appsScriptUrl,
+          "X-Gemini-Key": geminiKey
+        },
+        body: JSON.stringify(requestPayload)
+      })
+      .then(res => res.json())
+      .then(handleSuccess)
+      .catch(handleFailure);
+    } else {
+      if (typeof google !== 'undefined' && google.script && google.script.run) {
+        google.script.run
+          .withSuccessHandler(handleSuccess)
+          .withFailureHandler(handleFailure)
+          .directGetInventoryChecklist(email, pin, checklistSelectedPerformer);
+      } else {
+        // Offline mock runner
+        setTimeout(() => {
+          const mockData = {
+            success: true,
+            isAdminUser: email === "rodriguez2113@gmail.com" || email === "darienl140@gmail.com",
+            items: [
+              { rowIndex: 2, id: "C-101", description: "Mock Salsa Red Vest", picUrl: "https://www.dropbox.com/s/mock1/red_vest.jpg?dl=0", cost: "45.00", status: "Yes. I got it", notes: "Fits well.", assigned: email, type: "Costume" },
+              { rowIndex: 3, id: "P-202", description: "Mock Salsa Dance Shoes", picUrl: "", cost: "85.00", status: "-", notes: "", assigned: email, type: "Prop" }
+            ],
+            performersList: [
+              { email: "dancer1@gmail.com", name: "Dancer One" },
+              { email: "dancer2@gmail.com", name: "Dancer Two" }
+            ]
+          };
+          handleSuccess(mockData);
+        }, 800);
+      }
     }
   }
+
+  function populateChecklistTypeFilter() {
+    const filterEl = document.getElementById("checklistTypeFilter");
+    if (!filterEl) return;
+    
+    const dict = i18n[currentLanguage];
+    const currentVal = filterEl.value || "all";
+    filterEl.innerHTML = `<option value="all">${dict.allTypes || "🔍 All Types"}</option>`;
+    
+    const types = new Set();
+    checklistItems.forEach(item => {
+      if (item && item.type) {
+        const trimmed = item.type.trim();
+        if (trimmed) types.add(trimmed);
+      }
+    });
+    
+    Array.from(types).sort().forEach(type => {
+      const opt = document.createElement("option");
+      opt.value = type;
+      opt.textContent = type;
+      filterEl.appendChild(opt);
+    });
+    
+    if (types.has(currentVal)) {
+      filterEl.value = currentVal;
+    } else {
+      filterEl.value = "all";
+    }
+  }
+
+  function renderCostumeCards() {
+    const grid = document.getElementById("costume-checklist-grid");
+    if (!grid) return;
+    
+    grid.innerHTML = "";
+    
+    const dict = i18n[currentLanguage];
+    const selectedType = document.getElementById("checklistTypeFilter").value;
+    
+    let filtered = [...checklistItems];
+    if (selectedType && selectedType !== "all") {
+      filtered = filtered.filter(item => item && item.type === selectedType);
+    }
+    
+    // Update stats counters
+    updateChecklistStats(filtered);
+    
+    if (filtered.length === 0) {
+      grid.innerHTML = `
+        <div class="empty-state" style="grid-column: 1 / -1;">
+          <span class="material-icons-round" style="font-size:48px; color:var(--text-muted);">inventory_2</span>
+          <h3>${dict.noItemsTitle || "No Items Found"}</h3>
+          <p>${dict.checklistNoItems || "No assigned items located."}</p>
+        </div>
+      `;
+      return;
+    }
+
+    filtered.forEach(item => {
+      const card = document.createElement("div");
+      card.className = "item-card";
+      card.id = `checklist-card-${item.rowIndex}`;
+      
+      const isUnset = !item.status || item.status.trim() === "" || item.status.trim() === "-";
+      let selectClass = "val-unset";
+      if (item.status === "Yes. I got it") selectClass = "val-yes";
+      else if (item.status === "I returned it") selectClass = "val-returned";
+      else if (item.status === "I never received it.") selectClass = "val-never";
+      else if (item.status === "I lost it and need to replace it") selectClass = "val-lost";
+      else if (item.status === "I loaned it to another performer (See Notes)") selectClass = "val-loaned";
+      else if (item.status === "I damaged it and need to replace it") selectClass = "val-damaged";
+      else if (item.status === "I cannot read the label ID.") selectClass = "val-unread";
+      else if (item.status === "Yes I have one with a diferent number. See \"PERFORMER NOTES\" NOTES" || item.status === "Yes, I have the item with a different number. (See Performer Notes)") selectClass = "val-different";
+      
+      const convertedImgUrl = convertDropboxUrl(item.picUrl);
+      let imageHtml = "";
+      if (convertedImgUrl) {
+        imageHtml = `<img src="${convertedImgUrl}" class="item-img" alt="${escapeHtml(item.description)}" onerror="handleChecklistImageError(this)">`;
+      } else {
+        const fallbackText = currentLanguage === 'es' ? 'Vista previa no disponible' : 'No image preview available';
+        imageHtml = `
+          <div class="item-img-placeholder">
+            <span class="material-icons-round">image_not_supported</span>
+            <span style="font-size:11px;">${fallbackText}</span>
+          </div>
+        `;
+      }
+
+      const isAdminUser = sessionUser.email === "rodriguez2113@gmail.com" || sessionUser.email === "darienl140@gmail.com" || sessionUser.clearance === "director";
+
+      card.innerHTML = `
+        <div class="item-image-box" onclick="openZoomLightbox('${convertedImgUrl}', '${escapeHtml(item.description)}')">
+          ${imageHtml}
+          <span class="id-tag">ID: ${item.id || 'N/A'}</span>
+          <span class="cost-tag">${dict.lblChecklistCost} $${item.cost || 'N/A'}</span>
+        </div>
+        <div class="item-content">
+          <div class="item-info">
+            <h3 class="item-title">${item.description}</h3>
+            <div class="item-meta-badges">
+              <span class="meta-badge">ID: ${item.id || 'N/A'}</span>
+              <span class="meta-badge badge-gold">${dict.lblChecklistCost} $${item.cost || 'N/A'}</span>
+              <span class="meta-badge badge-type">${dict.lblChecklistType} ${item.type || 'General'}</span>
+              ${isAdminUser ? `<span class="meta-badge" style="color: #3b82f6; border-color: rgba(59, 130, 246, 0.25);">${dict.assignedLabel || "Assigned:"} ${item.assigned || 'Unassigned'}</span>` : ''}
+            </div>
+          </div>
+          
+          <div class="status-group">
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+              <label class="status-label">${dict.lblChecklistStatus}</label>
+              <span id="checklist-sync-${item.rowIndex}" class="sync-status">
+                <span class="spinner" style="display:none; width:10px; height:10px; border-width:1.5px; margin-right: 3px;"></span>
+                <span>${dict.checklistSaved || "Saved"}</span>
+              </span>
+            </div>
+            <div class="status-select-wrapper">
+              <select class="status-select ${selectClass}" id="checklist-status-${item.rowIndex}" onchange="saveCostumeField(${item.rowIndex}, '${item.id}', 'status')">
+                <option value="-" ${item.status === '-' || isUnset ? 'selected' : ''}>${dict.statusNotSet}</option>
+                <option value="Yes. I got it" ${item.status === 'Yes. I got it' ? 'selected' : ''}>${dict.statusYes}</option>
+                <option value="I returned it" ${item.status === 'I returned it' ? 'selected' : ''}>${dict.statusReturned}</option>
+                <option value="I never received it." ${item.status === 'I never received it.' ? 'selected' : ''}>${dict.statusNever}</option>
+                <option value="I lost it and need to replace it" ${item.status === 'I lost it and need to replace it' ? 'selected' : ''}>${dict.statusLost}</option>
+                <option value="I loaned it to another performer (See Notes)" ${item.status === 'I loaned it to another performer (See Notes)' ? 'selected' : ''}>${dict.statusLoaned}</option>
+                <option value="I damaged it and need to replace it" ${item.status === 'I damaged it and need to replace it' ? 'selected' : ''}>${dict.statusDamaged}</option>
+                <option value="I cannot read the label ID." ${item.status === 'I cannot read the label ID.' ? 'selected' : ''}>${dict.statusUnread}</option>
+                <option value="Yes I have one with a diferent number. See &quot;PERFORMER NOTES&quot; NOTES" ${item.status === 'Yes I have one with a diferent number. See "PERFORMER NOTES" NOTES' ? 'selected' : ''}>${dict.statusDifferentNumber}</option>
+                <option value="Yes, I have the item with a different number. (See Performer Notes)" ${item.status === 'Yes, I have the item with a different number. (See Performer Notes)' ? 'selected' : ''}>${dict.statusDifferentNumberNew}</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="notes-group">
+            <label class="notes-label">
+              <span>${dict.lblChecklistNotes}</span>
+            </label>
+            <textarea class="notes-textarea" id="checklist-notes-${item.rowIndex}" placeholder="${dict.notesPlaceholder}" oninput="debounceChecklistSave(${item.rowIndex}, '${item.id}')" onblur="blurChecklistSave(${item.rowIndex}, '${item.id}')">${item.notes || ''}</textarea>
+          </div>
+        </div>
+      `;
+      grid.appendChild(card);
+    });
+    
+    // Force layout style class
+    changeChecklistLayout();
+  }
+
+  function updateChecklistStats(itemsList) {
+    const total = itemsList.length;
+    let confirmed = 0;
+    
+    itemsList.forEach(item => {
+      if (item && item.status && item.status.trim() !== "" && item.status.trim() !== "-") {
+        confirmed++;
+      }
+    });
+    
+    document.getElementById("checklist-stat-total").textContent = total;
+    document.getElementById("checklist-stat-confirmed").textContent = confirmed;
+    document.getElementById("checklist-stat-pending").textContent = total - confirmed;
+  }
+
+  function handleChecklistImageError(img) {
+    const container = img.parentElement;
+    container.innerHTML = `
+      <div class="item-img-placeholder">
+        <span class="material-icons-round" style="color:var(--accent-crimson);">error_outline</span>
+        <span style="font-size:10px;">Error loading image</span>
+      </div>
+    `;
+  }
+
+  function changeChecklistLayout() {
+    const select = document.getElementById("checklistLayoutSelect");
+    const grid = document.getElementById("costume-checklist-grid");
+    if (!select || !grid) return;
+    
+    const layout = select.value;
+    grid.className = "item-grid"; // reset
+    grid.classList.add(layout);
+  }
+
+  function onChecklistPerformerChanged() {
+    const select = document.getElementById("checklistPerformerSelect");
+    if (!select) return;
+    
+    checklistSelectedPerformer = select.value;
+    
+    const grid = document.getElementById("costume-checklist-grid");
+    const dict = i18n[currentLanguage];
+    grid.innerHTML = `<div style="text-align: center; color: var(--text-muted); padding: 40px; width: 100%;" id="checklist-loading-msg">${dict.checklistLoading || "Loading checklist items..."}</div>`;
+    
+    fetchCostumeChecklist();
+  }
+
+  function saveCostumeField(rowIndex, expectedId, triggerField) {
+    const selectEl = document.getElementById(`checklist-status-${rowIndex}`);
+    const notesEl = document.getElementById(`checklist-notes-${rowIndex}`);
+    const statusIndicator = document.getElementById(`checklist-sync-${rowIndex}`);
+    
+    const newStatus = selectEl.value;
+    const notesText = notesEl.value;
+    const dict = i18n[currentLanguage];
+
+    // Reset and assign dropdown borders based on state value
+    selectEl.className = "status-select"; // reset
+    if (newStatus === "Yes. I got it") selectEl.classList.add("val-yes");
+    else if (newStatus === "I returned it") selectEl.classList.add("val-returned");
+    else if (newStatus === "I never received it.") selectEl.classList.add("val-never");
+    else if (newStatus === "I lost it and need to replace it") selectEl.classList.add("val-lost");
+    else if (newStatus === "I loaned it to another performer (See Notes)") selectEl.classList.add("val-loaned");
+    else if (newStatus === "I damaged it and need to replace it") selectEl.classList.add("val-damaged");
+    else if (newStatus === "I cannot read the label ID.") selectEl.classList.add("val-unread");
+    else if (newStatus === "Yes I have one with a diferent number. See \"PERFORMER NOTES\" NOTES" || newStatus === "Yes, I have the item with a different number. (See Performer Notes)") selectEl.classList.add("val-different");
+    else selectEl.classList.add("val-unset");
+
+    // Display saving spinner
+    statusIndicator.className = "sync-status active saving";
+    statusIndicator.querySelector('span:last-child').textContent = dict.checklistSaving || "Saving...";
+    statusIndicator.querySelector('.spinner').style.display = "inline-block";
+
+    const email = sessionUser.email;
+    const pin = getPINAuth();
+    const isHybrid = document.getElementById("architecture-toggle").classList.contains("active");
+
+    const requestPayload = {
+      email: email,
+      pin: pin,
+      action: "saveInventoryField",
+      rowIndex: rowIndex,
+      expectedId: expectedId,
+      newStatus: newStatus,
+      performerNotes: notesText,
+      query: "Save checklist cell"
+    };
+
+    const handleSuccess = (response) => {
+      if (response && response.success) {
+        statusIndicator.className = "sync-status active";
+        statusIndicator.querySelector('span:last-child').innerHTML = "&#x2713; " + (dict.checklistSaved || "Saved");
+        statusIndicator.querySelector('.spinner').style.display = "none";
+        
+        // Update local memory state cache
+        const index = checklistItems.findIndex(item => item.rowIndex === rowIndex);
+        if (index !== -1) {
+          checklistItems[index].status = newStatus;
+          checklistItems[index].notes = notesText;
+          if (response.resolvedRowIndex && response.resolvedRowIndex !== rowIndex) {
+            checklistItems[index].rowIndex = response.resolvedRowIndex;
+          }
+        }
+        
+        // Re-run stats counters
+        updateChecklistStats(checklistItems);
+
+        setTimeout(() => {
+          if (statusIndicator.classList.contains('active') && !statusIndicator.classList.contains('saving')) {
+            statusIndicator.classList.remove('active');
+          }
+        }, 2000);
+      } else {
+        handleFailure(response ? response.error : "Unknown save error.");
+      }
+    };
+
+    const handleFailure = (err) => {
+      statusIndicator.className = "sync-status active error";
+      statusIndicator.querySelector('span:last-child').textContent = dict.checklistError || "Save error";
+      statusIndicator.querySelector('.spinner').style.display = "none";
+      showToast((dict.toastSaveError || "Error saving: ") + err, "error");
+    };
+
+    if (isHybrid) {
+      const workerUrl = getNetworkSetting("worker_url");
+      const appsScriptUrl = getNetworkSetting("gas_url");
+      const geminiKey = getNetworkSetting("gemini_key");
+
+      fetch(workerUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Apps-Script-Url": appsScriptUrl,
+          "X-Gemini-Key": geminiKey
+        },
+        body: JSON.stringify(requestPayload)
+      })
+      .then(res => res.json())
+      .then(handleSuccess)
+      .catch(handleFailure);
+    } else {
+      if (typeof google !== 'undefined' && google.script && google.script.run) {
+        google.script.run
+          .withSuccessHandler(handleSuccess)
+          .withFailureHandler(handleFailure)
+          .directSaveInventoryField(email, pin, rowIndex, expectedId, newStatus, notesText);
+      } else {
+        // Offline mock save
+        setTimeout(() => {
+          handleSuccess({ success: true });
+        }, 1000);
+      }
+    }
+  }
+
+  function debounceChecklistSave(rowIndex, itemId) {
+    const statusIndicator = document.getElementById(`checklist-sync-${rowIndex}`);
+    const dict = i18n[currentLanguage];
+    statusIndicator.className = "sync-status active saving";
+    statusIndicator.querySelector('span:last-child').textContent = dict.typing || "Typing...";
+    statusIndicator.querySelector('.spinner').style.display = "none";
+
+    if (checklistDebounceTimers[rowIndex]) {
+      clearTimeout(checklistDebounceTimers[rowIndex]);
+    }
+
+    checklistDebounceTimers[rowIndex] = setTimeout(() => {
+      saveCostumeField(rowIndex, itemId, 'notes');
+      delete checklistDebounceTimers[rowIndex];
+    }, 1200);
+  }
+
+  function blurChecklistSave(rowIndex, itemId) {
+    if (checklistDebounceTimers[rowIndex]) {
+      clearTimeout(checklistDebounceTimers[rowIndex]);
+      delete checklistDebounceTimers[rowIndex];
+      saveCostumeField(rowIndex, itemId, 'notes');
+    }
+  }
+
+  function openZoomLightbox(src, description) {
+    if (!src) return;
+    const lightbox = document.getElementById("zoom-lightbox-modal");
+    const img = document.getElementById("zoom-lightbox-image");
+    
+    img.src = src;
+    img.alt = description;
+    lightbox.classList.add("active");
+  }
+
+  function closeZoomLightbox(event) {
+    if (event.target.classList.contains("lightbox-overlay") || event.target.classList.contains("lightbox-close-btn") || event.type === 'click') {
+      const lightbox = document.getElementById("zoom-lightbox-modal");
+      lightbox.classList.remove("active");
+      setTimeout(() => {
+        document.getElementById("zoom-lightbox-image").src = "";
+      }, 250);
+    }
+  }
+}
 </script>
