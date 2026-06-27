@@ -2467,4 +2467,25 @@ function updateItemStatusAndNotes(rowIndex, expectedId, newStatus, performerNote
   }
 }
 
+function testDatabaseConnection() {
+  Logger.log("Diagnostic check starting...");
+  Logger.log("SPREADSHEET_ID: " + SPREADSHEET_ID);
+  try {
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    if (!ss) {
+      Logger.log("Error: openById returned null.");
+      return;
+    }
+    Logger.log("Spreadsheet successfully opened: " + ss.getName());
+    const sheet = ss.getSheetByName("Profiles");
+    if (!sheet) {
+      Logger.log("Error: 'Profiles' sheet tab not found.");
+      return;
+    }
+    Logger.log("Profiles sheet successfully opened. Row count: " + sheet.getLastRow());
+  } catch (err) {
+    Logger.log("Exception thrown: " + err.toString());
+  }
+}
+
 
