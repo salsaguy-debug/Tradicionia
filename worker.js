@@ -65,7 +65,7 @@ async function handleRequest(request) {
     const { email, pin, query, language = 'en', action, history = [] } = payload;
 
     // Retrieve external service configurations from custom headers or payload
-    const appsScriptUrl = request.headers.get('X-Apps-Script-Url') || payload.appsScriptUrl || "https://script.google.com/macros/s/AKfycbzqgdC0SHfkddfYEiqsPo7nyywkP_cetYYVJROgajpw1bGqp_u_gQJz5RYALUbW3d3g/exec";
+    const appsScriptUrl = request.headers.get('X-Apps-Script-Url') || payload.appsScriptUrl || "https://script.google.com/macros/s/AKfycbwl4yIrEPk4tvEfhJdmYurdKP2rvWD8Di3DhK8xhzGZlBXOF2EqzRypOco-LPgCdrgr/exec";
     const geminiApiKey = request.headers.get('X-Gemini-Key') || payload.geminiApiKey;
     if (!email || !pin || !query) {
       throw new Error("Validation Failure: Email, PIN, and query are mandatory parameters.");
