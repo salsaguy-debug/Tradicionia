@@ -35,7 +35,7 @@
         <p class="subtitle">Tradici&oacute;n AI</p>
       </div>
 
-      <form id="login-form" onsubmit="handleAuth(event)">
+      <form id="login-form" onsubmit="event.preventDefault(); return false;">
         <div class="input-group">
           <label for="login-email">Registered Email</label>
           <div class="input-wrapper">
@@ -60,7 +60,7 @@
           <a href="#" class="forgot-link" onclick="handleForgotCredentials(event)">Forgot your EMAIL and/or PIN?</a>
         </div>
 
-        <button type="submit" id="btn-login-submit" class="btn-primary-glow">
+        <button type="button" id="btn-login-submit" class="btn-primary-glow" onclick="handleAuth(event)">
           <span>Initiate Security Handshake</span>
           <span class="material-icons-round">vpn_key</span>
         </button>
