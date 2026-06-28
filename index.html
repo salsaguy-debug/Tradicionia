@@ -6879,6 +6879,13 @@
     }
   }
 
+  function handleInputKeydown(event) {
+    if (event.key === 'Enter' && !event.shiftKey) {
+      event.preventDefault();
+      submitUserQuery();
+    }
+  }
+
   /**
    * Dispatches prompt and routes payload.
    */
