@@ -190,7 +190,7 @@ function validateCredentials(email, pin) {
     throw new Error("System Error: Credentials database ledger ('Profiles' or 'Profile') not found in spreadsheet.");
   }
   
-  const values = profilesSheet.getDataRange().getValues();
+  const values = getCachedProfilesValues(profilesSheet);
   if (values.length <= 1) {
     throw new Error("I see you are writing from " + email + ", but I don't see that email in our performer records. Reenter you email.");
   }
@@ -321,6 +321,37 @@ let ssInstanceCache = null;
   return ssInstanceCache;
 }
 
+function getCachedProfilesValues(profilesSheet) {
+  const cache = CacheService.getScriptCache();
+  const cacheKey = "profiles_sheet_values";
+  try {
+    const cached = cache.get(cacheKey);
+    if (cached) {
+      return JSON.parse(cached);
+    }
+  } catch (e) {
+    Logger.log("Failed to read from CacheService: " + e.toString());
+  }
+
+  const values = profilesSheet.getDataRange().getValues();
+
+  try {
+    cache.put(cacheKey, JSON.stringify(values), 300); // cache for 5 minutes
+  } catch (e) {
+    Logger.log("Failed to write to CacheService: " + e.toString());
+  }
+
+  return values;
+}
+
+function clearProfilesCache() {
+  try {
+    CacheService.getScriptCache().remove("profiles_sheet_values");
+  } catch (e) {
+    Logger.log("Failed to clear profiles cache: " + e.toString());
+  }
+}
+
 /**
  * Core Operational Data Orchestration:
  * Scans, routes, and filters sheet tabs + Google Calendar records.
@@ -407,7 +438,12 @@ function getFilteredContext(auth, query, history) {
     }
     if (!sheet) return;
     
-    let values = sheet.getDataRange().getValues();
+    let values;
+    if (tabName === "Profiles" || tabName === "Profile" || tabName === "Crosswalk" || tabName === "Sheet1" || sheet.getName() === "Profiles" || sheet.getName() === "Profile") {
+      values = getCachedProfilesValues(sheet);
+    } else {
+      values = sheet.getDataRange().getValues();
+    }
     
     // Check if the sheet contains a #REF! error or is empty
     const isBroken = values.length === 0 || 
@@ -1311,7 +1347,7 @@ function sendDailyFeedbackEmail() {
     const directors = [];
     const profilesSheet = ss.getSheetByName("Profiles") || ss.getSheetByName("Profile") || ss.getSheetByName("Sheet1") || ss.getSheetByName("Crosswalk");
     if (profilesSheet) {
-      const pValues = profilesSheet.getDataRange().getValues();
+      const pValues = getCachedProfilesValues(profilesSheet);
       const pHeaders = pValues[0].map(h => h.toString().toLowerCase().trim());
       const emailCol = pHeaders.findIndex(h => h.includes("email") || h.includes("correo"));
       const pinCol = pHeaders.findIndex(h => h.includes("pin") || h.includes("code") || h.includes("código"));
@@ -1832,7 +1868,7 @@ function directUpdateProfileAndMedicalDoc(email, pin, address, phone, emergencyC
       throw new Error("System Error: Credentials database ledger ('Profiles' or 'Profile') not found.");
     }
     
-    const pValues = profilesSheet.getDataRange().getValues();
+    const pValues = getCachedProfilesValues(profilesSheet);
     const pHeaders = pValues[0].map(h => h.toString().toLowerCase().trim());
     const emailCol = pHeaders.findIndex(h => h.includes("email") || h.includes("correo"));
     const addressCol = pHeaders.findIndex(h => (h.includes("address") || h.includes("dirección") || h.includes("direccion")) && !h.includes("email"));
@@ -1913,6 +1949,7 @@ function directUpdateProfileAndMedicalDoc(email, pin, address, phone, emergencyC
       }
     }
     
+    clearProfilesCache();
     return { success: true, message: "Profile and health records updated successfully, carajo!" };
   } catch (error) {
     return { success: false, error: error.message || error.toString() };
@@ -2138,6 +2175,7 @@ function syncFormResponsesToProfiles(e) {
       }
       
       if (updateMade) {
+        clearProfilesCache();
         Logger.log(`Successfully synced form response data to performer profile dynamically in DB: ${emailVal}`);
       } else {
         Logger.log(`Sync Notice: Performer matched but no matching target columns or values to update.`);
@@ -2364,7 +2402,7 @@ function getPerformersList() {
       const profilesSS = getSpreadsheetInstance(); // In AI OS, Profiles is in the main spreadsheet
       const profilesSheet = profilesSS.getSheetByName("Profiles") || profilesSS.getSheetByName("Profile") || profilesSS.getSheetByName("Sheet1") || profilesSS.getSheetByName("Crosswalk");
       if (profilesSheet) {
-        const profileValues = profilesSheet.getDataRange().getValues();
+        const profileValues = getCachedProfilesValues(profilesSheet);
         if (profileValues.length > 1) {
           const profileHeaders = profileValues[0].map(h => h.toString().toLowerCase().trim());
           const emailCol = profileHeaders.findIndex(h => h.includes("email") || h.includes("correo"));

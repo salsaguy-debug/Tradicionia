@@ -1834,6 +1834,11 @@
     }
   }
 
+  .spin {
+    display: inline-block;
+    animation: spin 1s linear infinite;
+  }
+
   @keyframes slideDown {
     from {
       opacity: 0;
@@ -3340,17 +3345,17 @@
         <!-- Sidebar Bottom Actions Drawer -->
         <div class="sidebar-footer">
           <button class="btn-sidebar-action text-accent" id="btn-inventory-admin" onclick="openInventoryAdminModal()"
-            style="display: none; margin-bottom: 5px;" title="Track &amp; Manage Inventory Changes">
+            style="display: none;" title="Track &amp; Manage Inventory Changes">
             <span class="material-icons-round">inventory</span>
             <span id="sidebar-manage-inventory-label">Manage Inventory</span>
           </button>
           <button class="btn-sidebar-action text-accent" id="btn-feedback-admin" onclick="openFeedbackAdminModal()"
-            style="display: none; margin-bottom: 5px;" title="Track &amp; Manage App Feedback">
+            style="display: none;" title="Track &amp; Manage App Feedback">
             <span class="material-icons-round">rule</span>
             <span id="sidebar-manage-feedback-label">Manage Feedback</span>
           </button>
           <button class="btn-sidebar-action text-accent" onclick="openInventoryChangeModal()"
-            title="Submit inventory change request" id="btn-inventory-change" style="margin-bottom: 5px;">
+            title="Submit inventory change request" id="btn-inventory-change">
             <span class="material-icons-round">assignment</span>
             <span id="sidebar-inventory-change-label">Inventory Change</span>
           </button>
@@ -3360,17 +3365,17 @@
             <span id="sidebar-feedback-label">Submit Feedback</span>
           </button>
           <button class="btn-sidebar-action text-accent" onclick="openCostumeChecklistModal()"
-            title="Verify my checked out costume and prop checklist" id="btn-costume-checklist" style="margin-bottom: 5px;">
+            title="Verify my checked out costume and prop checklist" id="btn-costume-checklist">
             <span class="material-icons-round">checkroom</span>
             <span id="sidebar-costume-checklist-label">Costume Checklist</span>
           </button>
           <button class="btn-sidebar-action text-accent" onclick="openUpdateInfoModal()"
-            title="Update my profile and health information" id="btn-update-info" style="margin-bottom: 5px;">
+            title="Update my profile and health information" id="btn-update-info">
             <span class="material-icons-round">contact_mail</span>
             <span id="sidebar-update-info-label">Update My Information</span>
           </button>
           <button class="btn-sidebar-action text-accent" onclick="openRecordPaymentModal()"
-            title="Record a performer cash payment contribution" id="btn-record-payment" style="margin-bottom: 5px;">
+            title="Record a performer cash payment contribution" id="btn-record-payment">
             <span class="material-icons-round">payments</span>
             <span id="sidebar-record-payment-label">Record Cash Payment</span>
           </button>
@@ -6105,6 +6110,7 @@
 
   let conversations = []; // Saved localStorage chats
   let activeChatId = null;
+  let loadingChats = new Set();
   let targetContextNodeId = null; // Stored for custom context actions
 
   let recognition = null; // Web Speech voice controller
@@ -6475,18 +6481,24 @@
     const adminFeedbackBtn = document.getElementById("btn-feedback-admin");
     const adminInventoryBtn = document.getElementById("btn-inventory-admin");
     const isInventoryAdmin = user.email === "rodriguez2113@gmail.com" || user.email === "darienl140@gmail.com";
+    const tabArch = document.getElementById("manual-tab-architecture");
+    const tabDeploy = document.getElementById("manual-tab-deployment");
     if (user.clearance === "director") {
       roleBadge.innerText = "Director";
       roleBadge.className = "badge-sub badge-role-director";
       clearanceHeader.innerText = i18n[currentLanguage].directorClearance;
       if (devSettingsBox) devSettingsBox.style.display = "block";
       if (adminFeedbackBtn) adminFeedbackBtn.style.display = "flex";
+      if (tabArch) tabArch.style.display = "inline-block";
+      if (tabDeploy) tabDeploy.style.display = "inline-block";
     } else {
       roleBadge.innerText = "Performer";
       roleBadge.className = "badge-sub";
       clearanceHeader.innerText = i18n[currentLanguage].performerClearance;
       if (devSettingsBox) devSettingsBox.style.display = "none";
       if (adminFeedbackBtn) adminFeedbackBtn.style.display = "none";
+      if (tabArch) tabArch.style.display = "none";
+      if (tabDeploy) tabDeploy.style.display = "none";
     }
     if (adminInventoryBtn) {
       adminInventoryBtn.style.display = isInventoryAdmin ? "flex" : "none";
@@ -6894,6 +6906,8 @@
     const query = inputEl.value.trim();
     if (!query) return;
 
+    const queryChatId = activeChatId;
+
     // Append user message immediately to layout
     appendChatMessage("user", query);
     inputEl.value = "";
@@ -6923,8 +6937,10 @@
     const devWorkerUrl = getNetworkSetting("worker_url");
     const devKey = getNetworkSetting("gemini_key");
 
-    const activeChat = conversations.find(c => c.id === activeChatId) || { messages: [] };
+    const activeChat = conversations.find(c => c.id === queryChatId) || { messages: [] };
     const historyPayload = activeChat.messages || [];
+
+    loadingChats.add(queryChatId);
 
     if (isWorkerMode && devWorkerUrl) {
       // Pipeline B: Cloudflare Worker Hybrid HTTP POST
@@ -6939,53 +6955,91 @@
       })
         .then(res => res.json())
         .then(data => {
-          typingIndicator.classList.add("hidden");
+          loadingChats.delete(queryChatId);
+          if (activeChatId === queryChatId) {
+            typingIndicator.classList.add("hidden");
+            resetSenderButton(btnSend, sendIcon);
+          }
           if (data.success) {
-            appendChatMessage("ai", data.response);
-            saveMessageToActiveHistory("ai", data.response);
+            if (activeChatId === queryChatId) {
+              appendChatMessage("ai", data.response);
+            }
+            saveMessageToHistory(queryChatId, "ai", data.response);
           } else {
-            appendChatMessage("ai", `Fallo en el gateway de El Patrón: ${data.error}`);
+            const errMsg = `Fallo en el gateway de El Patrón: ${data.error}`;
+            if (activeChatId === queryChatId) {
+              appendChatMessage("ai", errMsg);
+            }
+            saveMessageToHistory(queryChatId, "ai", errMsg);
           }
         })
         .catch(err => {
-          typingIndicator.classList.add("hidden");
-          appendChatMessage("ai", `Error al conectar con la armadura del Edge Router. Verifique configuraciones.`);
-        })
-        .finally(() => resetSenderButton(btnSend, sendIcon));
+          loadingChats.delete(queryChatId);
+          if (activeChatId === queryChatId) {
+            typingIndicator.classList.add("hidden");
+            resetSenderButton(btnSend, sendIcon);
+          }
+          const errMsg = `Error al conectar con la armadura del Edge Router. Verifique configuraciones.`;
+          if (activeChatId === queryChatId) {
+            appendChatMessage("ai", errMsg);
+          }
+          saveMessageToHistory(queryChatId, "ai", errMsg);
+        });
     } else {
       // Pipeline A: Consolidated Apps Script Direct Invoke
       if (typeof google !== 'undefined' && google.script && google.script.run) {
         google.script.run
           .withSuccessHandler((res) => {
-            typingIndicator.classList.add("hidden");
-            resetSenderButton(btnSend, sendIcon);
+            loadingChats.delete(queryChatId);
+            if (activeChatId === queryChatId) {
+              typingIndicator.classList.add("hidden");
+              resetSenderButton(btnSend, sendIcon);
+            }
             if (res && res.success) {
-              appendChatMessage("ai", res.response);
-              saveMessageToActiveHistory("ai", res.response);
+              if (activeChatId === queryChatId) {
+                appendChatMessage("ai", res.response);
+              }
+              saveMessageToHistory(queryChatId, "ai", res.response);
             } else {
-              appendChatMessage("ai", `Carajo, ocurrió un error en el backend: ${res ? res.error : "Sin respuesta"}`);
+              const errMsg = `Carajo, ocurrió un error en el backend: ${res ? res.error : "Sin respuesta"}`;
+              if (activeChatId === queryChatId) {
+                appendChatMessage("ai", errMsg);
+              }
+              saveMessageToHistory(queryChatId, "ai", errMsg);
             }
           })
           .withFailureHandler((err) => {
-            typingIndicator.classList.add("hidden");
-            resetSenderButton(btnSend, sendIcon);
-            appendChatMessage("ai", `Falla de red en Google Apps Script: ${err.message || err.toString()}`);
+            loadingChats.delete(queryChatId);
+            if (activeChatId === queryChatId) {
+              typingIndicator.classList.add("hidden");
+              resetSenderButton(btnSend, sendIcon);
+            }
+            const errMsg = `Falla de red en Google Apps Script: ${err.message || err.toString()}`;
+            if (activeChatId === queryChatId) {
+              appendChatMessage("ai", errMsg);
+            }
+            saveMessageToHistory(queryChatId, "ai", errMsg);
           })
           .directQueryGemini(email, pin, query, currentLanguage, historyPayload);
       } else {
         // Offline fallback simulation
         setTimeout(() => {
-          typingIndicator.classList.add("hidden");
-          resetSenderButton(btnSend, sendIcon);
+          loadingChats.delete(queryChatId);
+          if (activeChatId === queryChatId) {
+            typingIndicator.classList.add("hidden");
+            resetSenderButton(btnSend, sendIcon);
+          }
           const reply = runMockAIResponse(query);
-          appendChatMessage("ai", reply);
-          saveMessageToActiveHistory("ai", reply);
+          if (activeChatId === queryChatId) {
+            appendChatMessage("ai", reply);
+          }
+          saveMessageToHistory(queryChatId, "ai", reply);
         }, 1500);
       }
     }
 
     // Save user's question to persistent memory
-    saveMessageToActiveHistory("user", query);
+    saveMessageToHistory(queryChatId, "user", query);
   }
 
   function resetSenderButton(btn, icon) {
@@ -7379,10 +7433,47 @@
         appendChatMessage(msg.sender, msg.text);
       });
     }
+
+    // Restore loading state UI if this chat is currently loading
+    const btnSend = document.getElementById("btn-send-message");
+    const sendIcon = document.getElementById("send-btn-icon");
+    const typingIndicator = document.getElementById("typing-indicator");
+
+    if (loadingChats.has(chatId)) {
+      if (btnSend) {
+        btnSend.disabled = true;
+        btnSend.classList.add("loading");
+      }
+      if (sendIcon) sendIcon.innerText = "sync";
+      if (typingIndicator) typingIndicator.classList.remove("hidden");
+    } else {
+      if (btnSend) {
+        btnSend.disabled = false;
+        btnSend.classList.remove("loading");
+      }
+      if (sendIcon) sendIcon.innerText = "arrow_upward";
+      if (typingIndicator) typingIndicator.classList.add("hidden");
+    }
   }
 
   function saveMessageToActiveHistory(sender, text) {
     const chat = conversations.find(c => c.id === activeChatId);
+    if (!chat) return;
+
+    chat.messages.push({ sender, text });
+    chat.timestamp = Date.now();
+
+    // Update conversational titles using the first 20 characters of first query
+    if (chat.messages.length === 1 && sender === "user") {
+      chat.title = text.substring(0, 20) + (text.length > 20 ? "..." : "");
+    }
+
+    saveConversationsToStore();
+    renderHistorySidebar();
+  }
+
+  function saveMessageToHistory(chatId, sender, text) {
+    const chat = conversations.find(c => c.id === chatId);
     if (!chat) return;
 
     chat.messages.push({ sender, text });
@@ -8497,6 +8588,7 @@
         body: JSON.stringify({
           email: email,
           pin: pin,
+          action: "getFeedbackStats",
           getFeedbackStats: true,
           query: "Get feedback stats"
         })
