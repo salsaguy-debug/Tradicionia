@@ -1,7 +1,7 @@
 import os
 import re
 
-js_path = r"c:\Users\Angel A Rodriguez\.gemini\antigravity\scratch\tradicion-ai-os\JavaScript.html"
+js_path = r"c:\Users\Angel A Rodriguez\.gemini\antigravity\scratch\tradicion-ai-os\apps-script\JavaScript.html"
 preview_path = r"c:\Users\Angel A Rodriguez\.gemini\antigravity\scratch\tradicion-ai-os\local_preview.html"
 
 with open(js_path, "r", encoding="utf-8") as f:

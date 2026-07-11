@@ -1,7 +1,7 @@
 import os
 
 workspace_dir = r"c:\Users\Angel A Rodriguez\.gemini\antigravity\scratch\tradicion-ai-os"
-js_path = os.path.join(workspace_dir, "JavaScript.html")
+js_path = os.path.join(workspace_dir, "apps-script", "JavaScript.html")
 preview_path = os.path.join(workspace_dir, "local_preview.html")
 
 print(f"Reading files...")
