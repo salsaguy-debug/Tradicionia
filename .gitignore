@@ -1,7 +1,0 @@
-__pycache__/
-*.pyc
-requests_history.txt
-conv_detail.txt
-local_preview.html
-node_modules/
-**/node_modules/
